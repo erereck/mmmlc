@@ -547,6 +547,7 @@
   function exportObject(obj, index, list) {
     const clean = syncObjectInternals(clone(obj));
     ensurePositiveRect(clean);
+    const exportName = exportShapeName(clean, index);
     const fillRgb = rgbFromHex(clean.fill);
     const lineRgb = rgbFromHex(clean.stroke);
     return {
@@ -554,7 +555,7 @@
       order: index,
       type: clean.type,
       label: typeLabel(clean.type),
-      name: clean.name,
+      name: exportName,
       text: clean.text || "",
       hidden: !!clean.hidden,
       locked: !!clean.locked,
@@ -567,7 +568,7 @@
       line: clean.stroke || "transparent",
       strokeWidth: clean.strokeWidth || 1,
       ppt: {
-        Name: clean.name,
+        Name: exportName,
         Left: round(clean.x),
         Top: round(clean.y),
         Width: round(clean.w),
@@ -580,6 +581,11 @@
       },
       gameplay: gameplayData(clean, list)
     };
+  }
+
+  function exportShapeName(obj, index) {
+    if (obj.type === "platform") return `$${index}`;
+    return obj.name;
   }
 
   function exportLevel(tab = activeTab()) {
