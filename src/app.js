@@ -41,6 +41,7 @@
     activeTabId: "work",
     tool: "select",
     selectedId: null,
+    selectedIds: [],
     view: { x: 0, y: 0, w: SLIDE_W, h: SLIDE_H },
     grid: true,
     snap: true,
@@ -128,6 +129,42 @@
 
   function selectedObject() {
     return objects().find((obj) => obj.id === state.selectedId) || null;
+  }
+
+  function selectedObjects() {
+    const selected = new Set(state.selectedIds);
+    return objects().filter((obj) => selected.has(obj.id));
+  }
+
+  function hasSelection(id) {
+    return state.selectedIds.includes(id);
+  }
+
+  function syncSelection() {
+    const valid = new Set(objects().map((obj) => obj.id));
+    state.selectedIds = state.selectedIds.filter((id) => valid.has(id));
+    if (!valid.has(state.selectedId)) state.selectedId = state.selectedIds[state.selectedIds.length - 1] || null;
+    if (state.selectedId && !state.selectedIds.includes(state.selectedId)) state.selectedIds.push(state.selectedId);
+  }
+
+  function setSelection(ids, primaryId = null) {
+    const valid = new Set(objects().map((obj) => obj.id));
+    state.selectedIds = [...new Set(ids.filter((id) => valid.has(id)))];
+    state.selectedId = primaryId && valid.has(primaryId) ? primaryId : state.selectedIds[state.selectedIds.length - 1] || null;
+    if (state.selectedId && !state.selectedIds.includes(state.selectedId)) state.selectedIds.push(state.selectedId);
+  }
+
+  function clearSelection() {
+    state.selectedId = null;
+    state.selectedIds = [];
+  }
+
+  function toggleSelection(id) {
+    if (hasSelection(id)) {
+      setSelection(state.selectedIds.filter((item) => item !== id));
+    } else {
+      setSelection([...state.selectedIds, id], id);
+    }
   }
 
   function svgEl(tag, attrs = {}, children = []) {
@@ -273,6 +310,33 @@
     const ids = [...doorIdSet(isDoorType)].map(Number).filter(Number.isFinite);
     const maxId = ids.length ? Math.max(...ids) : 0;
     return String(maxId + 1);
+  }
+
+  function nextDoorIdFromUsed(usedIds) {
+    let id = 1;
+    while (usedIds.has(String(id))) id += 1;
+    usedIds.add(String(id));
+    return String(id);
+  }
+
+  function cloneObjectsForInsert(sourceObjects, offsetX, offsetY) {
+    const usedDoorIds = doorIdSet(isDoorType);
+    const doorMap = new Map();
+    return sourceObjects.map((obj) => {
+      const copy = clone(obj);
+      copy.id = newObjectId();
+      copy.x = round(copy.x + offsetX);
+      copy.y = round(copy.y + offsetY);
+      if (isDoorType(copy.type)) {
+        const key = `${doorMode(copy.type)}:${parseDoorId(copy)}`;
+        if (!doorMap.has(key)) doorMap.set(key, nextDoorIdFromUsed(usedDoorIds));
+        copy.text = doorMap.get(key);
+        copy.doorId = copy.text;
+      }
+      copy.name = autoName(copy.type);
+      syncObjectInternals(copy);
+      return copy;
+    });
   }
 
   function syncObjectInternals(obj, preserveText = true) {
@@ -700,7 +764,7 @@
 
   function restoreObjects(nextObjects) {
     activeTab().objects = clone(nextObjects);
-    if (!selectedObject()) state.selectedId = null;
+    syncSelection();
     render();
   }
 
@@ -724,7 +788,7 @@
 
   function setActiveTab(id) {
     state.activeTabId = id;
-    state.selectedId = null;
+    clearSelection();
     state.history = [];
     state.future = [];
     fitView(false);
@@ -774,7 +838,7 @@
     if (state.tabs.length <= 1) {
       state.tabs = [{ id: uniqueTabId(), title: "Fase 1", example: false, objects: defaultLevel() }];
       state.activeTabId = state.tabs[0].id;
-      state.selectedId = null;
+      clearSelection();
       saveLocal();
       render();
       return;
@@ -784,7 +848,7 @@
     state.tabs.splice(idx, 1);
     const next = state.tabs[Math.max(0, idx - 1)] || state.tabs[0];
     state.activeTabId = next.id;
-    state.selectedId = null;
+    clearSelection();
     state.history = [];
     state.future = [];
     saveLocal();
@@ -933,6 +997,29 @@
     return { x: obj.x + obj.w / 2, y: obj.y + obj.h / 2 };
   }
 
+  function objectRect(obj) {
+    return { x: obj.x, y: obj.y, w: obj.w, h: obj.h };
+  }
+
+  function normalizeRect(a, b) {
+    const x = Math.min(a.x, b.x);
+    const y = Math.min(a.y, b.y);
+    return { x, y, w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) };
+  }
+
+  function rectsIntersect(a, b) {
+    return a.x <= b.x + b.w && a.x + a.w >= b.x && a.y <= b.y + b.h && a.y + a.h >= b.y;
+  }
+
+  function selectionBounds(list = selectedObjects()) {
+    if (!list.length) return null;
+    const minX = Math.min(...list.map((obj) => obj.x));
+    const minY = Math.min(...list.map((obj) => obj.y));
+    const maxX = Math.max(...list.map((obj) => obj.x + obj.w));
+    const maxY = Math.max(...list.map((obj) => obj.y + obj.h));
+    return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+  }
+
   function doorPartners(obj) {
     return doorPartnersIn(objects(), obj);
   }
@@ -1003,15 +1090,16 @@
     els.layerList.innerHTML = "";
     [...objects()].reverse().forEach((obj) => {
       const item = document.createElement("div");
-      item.className = `layer-item${obj.id === state.selectedId ? " active" : ""}`;
+      item.className = `layer-item${hasSelection(obj.id) ? " active" : ""}`;
       item.innerHTML = `
         <span class="layer-dot" style="border-color:${obj.stroke};background:${obj.fill === "transparent" ? "#111" : obj.fill}"></span>
         <span class="layer-name">${displayName(obj)}</span>
         ${obj.hidden ? `<span class="layer-flag">oculto</span>` : ""}
         <span class="layer-type">${typeLabel(obj.type)}</span>
       `;
-      item.addEventListener("click", () => {
-        state.selectedId = obj.id;
+      item.addEventListener("click", (e) => {
+        if (e.shiftKey || e.ctrlKey || e.metaKey) toggleSelection(obj.id);
+        else setSelection([obj.id], obj.id);
         setTool("select");
         render();
       });
@@ -1020,7 +1108,9 @@
   }
 
   function renderInspector() {
+    syncSelection();
     const obj = selectedObject();
+    const multiCount = state.selectedIds.length;
     els.emptyInspector.classList.toggle("hidden", !!obj);
     els.inspector.classList.toggle("hidden", !obj);
     els.quickEdit.classList.toggle("hidden", !obj);
@@ -1086,11 +1176,16 @@
     } else {
       els.propTextLabel.textContent = "Texto";
     }
+
+    if (multiCount > 1) {
+      const note = `${multiCount} objetos selecionados. Mover, duplicar, excluir e setas afetam todos.`;
+      els.computedNote.textContent = els.computedNote.textContent ? `${note} ${els.computedNote.textContent}` : note;
+    }
   }
 
   function renderObject(obj) {
     const g = svgEl("g", {
-      class: `object ${obj.id === state.selectedId ? "selected" : ""} ${obj.locked ? "locked" : ""} ${obj.hidden ? "hidden-initial" : ""}`,
+      class: `object ${hasSelection(obj.id) ? "selected" : ""} ${obj.locked ? "locked" : ""} ${obj.hidden ? "hidden-initial" : ""}`,
       "data-id": obj.id
     });
 
@@ -1391,8 +1486,14 @@
 
   function renderOverlay() {
     els.overlayLayer.innerHTML = "";
+    if (state.drag?.mode === "marquee") renderMarquee();
+    const selected = selectedObjects();
     const obj = selectedObject();
     if (!obj) return;
+    if (selected.length > 1) {
+      renderMultiSelection(selected);
+      return;
+    }
     renderDoorConnector(obj);
     renderMovingConnector(obj);
     const pad = 0;
@@ -1423,6 +1524,39 @@
       h.addEventListener("pointerdown", onHandlePointerDown);
       els.overlayLayer.appendChild(h);
     }
+  }
+
+  function renderMultiSelection(selected) {
+    for (const item of selected) {
+      els.overlayLayer.appendChild(svgEl("rect", {
+        class: "selection-member-rect",
+        x: item.x,
+        y: item.y,
+        width: item.w,
+        height: item.h
+      }));
+    }
+    const bounds = selectionBounds(selected);
+    if (!bounds) return;
+    els.overlayLayer.appendChild(svgEl("rect", {
+      class: "selection-bounds",
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.w,
+      height: bounds.h
+    }));
+  }
+
+  function renderMarquee() {
+    const rect = normalizeRect(state.drag.start, state.drag.current || state.drag.start);
+    if (rect.w < 2 && rect.h < 2) return;
+    els.overlayLayer.appendChild(svgEl("rect", {
+      class: "marquee-rect",
+      x: rect.x,
+      y: rect.y,
+      width: rect.w,
+      height: rect.h
+    }));
   }
 
   function renderMovingConnector(obj) {
@@ -1529,15 +1663,38 @@
     e.stopPropagation();
     const id = e.currentTarget.dataset.id;
     const obj = objects().find((item) => item.id === id);
+    const additive = e.shiftKey || e.ctrlKey || e.metaKey;
     if (!obj || obj.locked) {
-      state.selectedId = id;
+      if (additive) toggleSelection(id);
+      else setSelection([id], id);
       render();
       return;
     }
+    if (additive) {
+      toggleSelection(id);
+      if (!hasSelection(id)) {
+        render();
+        return;
+      }
+    } else if (!hasSelection(id)) {
+      setSelection([id], id);
+    } else {
+      state.selectedId = id;
+    }
     pushHistory();
-    state.selectedId = id;
     const p = pointFromEvent(e);
-    state.drag = { mode: "move", id, start: p, original: clone(obj) };
+    const movable = selectedObjects().filter((item) => !item.locked);
+    state.drag = {
+      mode: "move",
+      id,
+      ids: movable.map((item) => item.id),
+      start: p,
+      original: clone(obj),
+      originals: movable.reduce((acc, item) => {
+        acc[item.id] = clone(item);
+        return acc;
+      }, {})
+    };
     els.stage.setPointerCapture(e.pointerId);
     render();
   }
@@ -1591,12 +1748,12 @@
     if (fixed) {
       obj = makeObject(type, snapValue(p.x - meta.w / 2), snapValue(p.y - meta.h / 2));
       objects().push(obj);
-      state.selectedId = obj.id;
+      setSelection([obj.id], obj.id);
       state.drag = { mode: "move", id: obj.id, start: p, original: clone(obj) };
     } else {
       obj = makeObject(type, snapValue(p.x), snapValue(p.y), { w: 1, h: 1 });
       objects().push(obj);
-      state.selectedId = obj.id;
+      setSelection([obj.id], obj.id);
       state.drag = { mode: "draw", id: obj.id, start: { x: obj.x, y: obj.y } };
     }
     els.stage.setPointerCapture(e.pointerId);
@@ -1611,7 +1768,11 @@
       return;
     }
     if (state.tool === "select") {
-      state.selectedId = null;
+      const p = pointFromEvent(e);
+      const additive = e.shiftKey || e.ctrlKey || e.metaKey;
+      if (!additive) clearSelection();
+      state.drag = { mode: "marquee", start: p, current: p, additive, moved: false };
+      els.stage.setPointerCapture(e.pointerId);
       render();
       return;
     }
@@ -1632,19 +1793,23 @@
       return;
     }
 
+    if (state.drag.mode === "marquee") {
+      state.drag.current = p;
+      state.drag.moved = Math.abs(p.x - state.drag.start.x) > 2 || Math.abs(p.y - state.drag.start.y) > 2;
+      render();
+      return;
+    }
+
+    if (state.drag.mode === "move") {
+      moveDraggedSelection(p);
+      render();
+      return;
+    }
+
     const obj = objects().find((item) => item.id === state.drag.id);
     if (!obj) return;
 
-    if (state.drag.mode === "move") {
-      obj.x = snapValue(state.drag.original.x + (p.x - state.drag.start.x));
-      obj.y = snapValue(state.drag.original.y + (p.y - state.drag.start.y));
-      if (isMovingType(obj.type)) {
-        const deltaX = obj.x - state.drag.original.x;
-        obj.movingMin = round(Number(state.drag.original.movingMin) + deltaX);
-        obj.movingMax = round(Number(state.drag.original.movingMax) + deltaX);
-        setMovingText(obj);
-      }
-    } else if (state.drag.mode === "draw") {
+    if (state.drag.mode === "draw") {
       obj.x = state.drag.start.x;
       obj.y = state.drag.start.y;
       obj.w = snapValue(p.x) - state.drag.start.x;
@@ -1656,6 +1821,31 @@
       resizeMovingPath(obj, p);
     }
     render();
+  }
+
+  function moveDraggedSelection(p) {
+    const ids = state.drag.ids?.length ? state.drag.ids : [state.drag.id];
+    for (const id of ids) {
+      const obj = objects().find((item) => item.id === id);
+      const original = state.drag.originals?.[id] || state.drag.original;
+      if (!obj || !original || obj.locked) continue;
+      obj.x = snapValue(original.x + (p.x - state.drag.start.x));
+      obj.y = snapValue(original.y + (p.y - state.drag.start.y));
+      if (isMovingType(obj.type)) {
+        const deltaX = obj.x - original.x;
+        obj.movingMin = round(Number(original.movingMin) + deltaX);
+        obj.movingMax = round(Number(original.movingMax) + deltaX);
+        setMovingText(obj);
+      }
+    }
+  }
+
+  function selectObjectsInMarquee() {
+    if (!state.drag?.moved) return;
+    const rect = normalizeRect(state.drag.start, state.drag.current || state.drag.start);
+    const hits = objects().filter((obj) => !obj.locked && rectsIntersect(rect, objectRect(obj))).map((obj) => obj.id);
+    if (state.drag.additive) setSelection([...state.selectedIds, ...hits], hits[hits.length - 1] || state.selectedId);
+    else setSelection(hits, hits[hits.length - 1] || null);
   }
 
   function resizeMovingPath(obj, p) {
@@ -1700,6 +1890,9 @@
 
   function onStagePointerUp(e) {
     const finishedDrag = state.drag ? { ...state.drag } : null;
+    if (state.drag?.mode === "marquee") {
+      selectObjectsInMarquee();
+    }
     if (state.drag?.mode === "draw") {
       const obj = objects().find((item) => item.id === state.drag.id);
       if (obj) {
@@ -1719,6 +1912,12 @@
           if (Number(obj.movingMax) <= Number(obj.movingMin)) obj.movingMax = round(obj.x + 160);
         }
         syncObjectInternals(obj);
+      }
+    }
+    if (finishedDrag?.mode === "move" && finishedDrag.ids?.length) {
+      for (const id of finishedDrag.ids) {
+        const obj = objects().find((item) => item.id === id);
+        if (obj) syncObjectInternals(obj);
       }
     }
     state.drag = null;
@@ -1749,90 +1948,79 @@
   }
 
   function duplicateSelected() {
-    const obj = selectedObject();
-    if (!obj) return;
+    const selection = selectedObjects();
+    if (!selection.length) return;
     pushHistory();
-    const copy = clone(obj);
-    copy.id = newObjectId();
-    copy.x += state.gridSize;
-    copy.y += state.gridSize;
-    if (isDoorType(copy.type)) {
-      copy.text = nextDoorIdFor(copy.type);
-      copy.doorId = copy.text;
-    }
-    copy.name = autoName(copy.type);
-    syncObjectInternals(copy);
-    objects().push(copy);
-    state.selectedId = copy.id;
+    const copies = cloneObjectsForInsert(selection, state.gridSize, state.gridSize);
+    objects().push(...copies);
+    setSelection(copies.map((copy) => copy.id), copies[copies.length - 1]?.id || null);
     saveLocal();
     render();
   }
 
   function copySelected() {
-    const obj = selectedObject();
-    if (!obj) return;
-    state.clipboard = clone(obj);
+    const selection = selectedObjects();
+    if (!selection.length) return;
+    state.clipboard = clone(selection);
+    showToast(selection.length > 1 ? `${selection.length} objetos copiados` : "Objeto copiado");
   }
 
   function pasteClipboard() {
     if (!state.clipboard) return;
     pushHistory();
-    const copy = clone(state.clipboard);
-    copy.id = newObjectId();
-    copy.x = snapValue(state.lastPointer.x - copy.w / 2);
-    copy.y = snapValue(state.lastPointer.y - copy.h / 2);
-    if (isDoorType(copy.type)) {
-      copy.text = nextDoorIdFor(copy.type);
-      copy.doorId = copy.text;
-    }
-    syncObjectInternals(copy);
-    objects().push(copy);
-    state.selectedId = copy.id;
+    const source = Array.isArray(state.clipboard) ? state.clipboard : [state.clipboard];
+    const bounds = selectionBounds(source);
+    const offsetX = bounds ? snapValue(state.lastPointer.x - bounds.x - bounds.w / 2) : 0;
+    const offsetY = bounds ? snapValue(state.lastPointer.y - bounds.y - bounds.h / 2) : 0;
+    const copies = cloneObjectsForInsert(source, offsetX, offsetY);
+    objects().push(...copies);
+    setSelection(copies.map((copy) => copy.id), copies[copies.length - 1]?.id || null);
     saveLocal();
     render();
   }
 
   function deleteSelected() {
-    if (!state.selectedId) return;
+    if (!state.selectedIds.length) return;
     pushHistory();
-    const idx = objects().findIndex((obj) => obj.id === state.selectedId);
-    if (idx >= 0) objects().splice(idx, 1);
-    state.selectedId = null;
+    const selected = new Set(state.selectedIds);
+    activeTab().objects = objects().filter((obj) => !selected.has(obj.id));
+    clearSelection();
     saveLocal();
     render();
   }
 
   function bringSelectedFront() {
-    const obj = selectedObject();
-    if (!obj) return;
     const list = objects();
-    const idx = list.findIndex((item) => item.id === obj.id);
-    if (idx < 0 || idx === list.length - 1) return;
+    const selected = new Set(state.selectedIds);
+    if (!selected.size) return;
     pushHistory();
-    list.splice(idx, 1);
-    list.push(obj);
+    const stay = list.filter((item) => !selected.has(item.id));
+    const move = list.filter((item) => selected.has(item.id));
+    activeTab().objects = [...stay, ...move];
     saveLocal();
     render();
   }
 
   function sendSelectedBack() {
-    const obj = selectedObject();
-    if (!obj) return;
     const list = objects();
-    const idx = list.findIndex((item) => item.id === obj.id);
-    if (idx <= 0) return;
+    const selected = new Set(state.selectedIds);
+    if (!selected.size) return;
     pushHistory();
-    list.splice(idx, 1);
-    list.unshift(obj);
+    const move = list.filter((item) => selected.has(item.id));
+    const stay = list.filter((item) => !selected.has(item.id));
+    activeTab().objects = [...move, ...stay];
     saveLocal();
     render();
   }
 
   function toggleSelectedLock() {
-    const obj = selectedObject();
-    if (!obj) return;
+    const selection = selectedObjects();
+    if (!selection.length) return;
     pushHistory();
-    obj.locked = !obj.locked;
+    const locked = !selectedObject()?.locked;
+    selection.forEach((obj) => {
+      obj.locked = locked;
+    });
     saveLocal();
     render();
   }
@@ -1847,24 +2035,32 @@
     pushHistory();
     const partner = makeObject(partnerType, clamp(x, 0, SLIDE_W - 90), clamp(y, 0, SLIDE_H - 30), { text: id, doorId: id });
     objects().push(partner);
-    state.selectedId = partner.id;
+    setSelection([partner.id], partner.id);
     saveLocal();
     render();
   }
 
   function nudgeSelected(dx, dy) {
-    const obj = selectedObject();
-    if (!obj || obj.locked) return;
+    const selection = selectedObjects().filter((obj) => !obj.locked);
+    if (!selection.length) return;
     pushHistory();
-    obj.x = round(obj.x + dx);
-    obj.y = round(obj.y + dy);
+    selection.forEach((obj) => {
+      obj.x = round(obj.x + dx);
+      obj.y = round(obj.y + dy);
+      if (isMovingType(obj.type)) {
+        obj.movingMin = round(Number(obj.movingMin) + dx);
+        obj.movingMax = round(Number(obj.movingMax) + dx);
+      }
+      syncObjectInternals(obj);
+    });
     saveLocal();
     render();
   }
 
   function showContextMenu(e, obj) {
     e.preventDefault();
-    state.selectedId = obj?.id || state.selectedId;
+    if (obj?.id && !hasSelection(obj.id)) setSelection([obj.id], obj.id);
+    else if (obj?.id) state.selectedId = obj.id;
     setTool("select");
     render();
     const menu = els.contextMenu;
@@ -1872,8 +2068,8 @@
     menu.style.left = `${Math.min(e.clientX, window.innerWidth - 210)}px`;
     menu.style.top = `${Math.min(e.clientY, window.innerHeight - 250)}px`;
     menu.querySelector('[data-action="paste"]').disabled = !state.clipboard;
-    menu.querySelector('[data-action="variant"]').disabled = !canCycleVariant(selectedObject());
-    menu.querySelector('[data-action="pair-door"]').disabled = !isDoorType(selectedObject()?.type);
+    menu.querySelector('[data-action="variant"]').disabled = state.selectedIds.length !== 1 || !canCycleVariant(selectedObject());
+    menu.querySelector('[data-action="pair-door"]').disabled = state.selectedIds.length !== 1 || !isDoorType(selectedObject()?.type);
   }
 
   function hideContextMenu() {
@@ -2080,6 +2276,14 @@
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
         e.preventDefault();
         pasteClipboard();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        setSelection(objects().filter((obj) => !obj.locked).map((obj) => obj.id));
+        render();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        clearSelection();
+        render();
       } else if (!e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "v") {
         e.preventDefault();
         cycleSelectedVariant();

@@ -874,6 +874,33 @@ input[type="range"] {
   stroke-dasharray: 6 4;
 }
 
+.selection-member-rect {
+  fill: none;
+  stroke: rgba(41, 123, 255, .55);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 4 4;
+  pointer-events: none;
+}
+
+.selection-bounds {
+  fill: rgba(41, 123, 255, .07);
+  stroke: var(--blue);
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 8 5;
+  pointer-events: none;
+}
+
+.marquee-rect {
+  fill: rgba(41, 123, 255, .12);
+  stroke: var(--blue);
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 5 4;
+  pointer-events: none;
+}
+
 .handle {
   fill: var(--blue);
   stroke: #fff;
