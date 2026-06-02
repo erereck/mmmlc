@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MMM Level Creator</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">MMM</span>
+          <div>
+            <h1>Level Creator</h1>
+            <p>960 x 540 pontos PowerPoint</p>
+          </div>
+        </div>
+        <div class="top-actions">
+          <button id="newLevelBtn" class="cmd">Nova fase</button>
+          <button id="useExampleBtn" class="cmd">Usar como base</button>
+          <button id="fitBtn" class="cmd">Enquadrar</button>
+          <button id="toggleRightBtn" class="cmd">Inspetor</button>
+          <button id="exportBtn" class="cmd primary">Exportar JSON</button>
+          <button id="exportAllBtn" class="cmd">Exportar tudo</button>
+          <button id="saveBtn" class="cmd">Salvar local</button>
+        </div>
+      </header>
+
+      <aside class="left-panel">
+        <section class="tabs-section">
+          <div class="section-head">
+            <h2>Fases</h2>
+            <div class="section-actions">
+              <button id="toggleTabsBtn" class="mini-btn" title="Ocultar lista de fases">Ocultar</button>
+              <button id="addTabBtn" class="mini-btn" title="Criar nova fase">+</button>
+              <button id="removeTabBtn" class="mini-btn danger" title="Excluir fase atual">&times;</button>
+            </div>
+          </div>
+          <div id="tabList" class="tab-list"></div>
+        </section>
+
+        <section>
+          <h2>Ferramentas</h2>
+          <div id="toolGrid" class="tool-grid">
+            <div class="tool-group-title">Edição</div>
+            <button class="tool active" data-tool="select" title="Selecionar, mover e redimensionar objetos"><span class="tool-icon cursor-icon"></span><span>Selecionar</span></button>
+            <button class="tool" data-tool="pan" title="Arrastar a camera do editor"><span class="tool-icon pan-icon"></span><span>Mover tela</span></button>
+
+            <div class="tool-group-title">Blocos</div>
+            <button class="tool" data-tool="platform" title="Plataforma normal: nome $"><span class="tool-icon platform-icon"></span><span>Plataforma</span></button>
+            <button class="tool" data-tool="moving-platform" title="Plataforma movel horizontal. Use Alternar no inspector para virar ghost"><span class="tool-icon moving-icon"></span><span>Movel</span></button>
+            <button class="tool" data-tool="toggle-platform" title="Plataforma que liga/desliga pelo intervalo do texto"><span class="tool-icon toggle-icon"></span><span>Temporaria</span></button>
+            <button class="tool" data-tool="ice" title="Plataforma escorregadia: nome #="><span class="tool-icon ice-icon"></span><span>Gelo</span></button>
+            <button class="tool" data-tool="death" title="Bloco que mata: nome #@"><span class="tool-icon death-icon"></span><span>Morte</span></button>
+
+            <div class="tool-group-title">Interação</div>
+            <button class="tool" data-tool="coin" title="Moeda: nome #%"><span class="tool-icon coin-icon"></span><span>Moeda</span></button>
+            <button class="tool" data-tool="portal" title="Portal de saida: nome #Portal"><span class="tool-icon portal-icon"></span><span>Portal</span></button>
+            <button class="tool" data-tool="spring" title="Mola: nome #&, força vazia significa 1"><span class="tool-icon spring-icon"></span><span>Mola</span></button>
+            <button class="tool" data-tool="spawn" title="Spawn do jogador"><span class="tool-icon spawn-icon"></span><span>Spawn</span></button>
+            <button class="tool" data-tool="water" title="Agua: nome #:"><span class="tool-icon water-icon"></span><span>Agua</span></button>
+
+            <div class="tool-group-title">Player</div>
+            <button class="tool" data-tool="jump" title="Powerup de pulo: nome #^ com texto P"><span class="tool-icon jump-icon"></span><span>Pulo+</span></button>
+            <button class="tool" data-tool="speed" title="Powerup de velocidade: nome #^ com texto V"><span class="tool-icon speed-icon"></span><span>Vel+</span></button>
+            <button class="tool" data-tool="gravity" title="Inverte gravidade. Use Alternar no inspector para afetar todos"><span class="tool-icon gravity-icon"></span><span>Gravidade</span></button>
+            <button class="tool" data-tool="big-player" title="Aumenta o jogador: nome #~ com texto C"><span class="tool-icon big-icon"></span><span>Grande</span></button>
+            <button class="tool" data-tool="mini-player" title="Diminui o jogador: nome #~ com texto D"><span class="tool-icon mini-icon"></span><span>Pequeno</span></button>
+
+            <div class="tool-group-title">Portas / Coop</div>
+            <button class="tool" data-tool="p1-platform" title="Barreira de jogador. Use Alternar para trocar entre P1 e P2"><span class="tool-icon p1-icon"></span><span>Barreira P1/P2</span></button>
+            <button class="tool" data-tool="door-button" title="Botao que abre uma porta pelo ID. Use Alternar para inverter"><span class="tool-icon door-btn-icon"></span><span>Botao porta</span></button>
+            <button class="tool" data-tool="door-platform" title="Porta controlada por botao de mesmo ID. Use Alternar para inverter"><span class="tool-icon door-icon"></span><span>Porta</span></button>
+          </div>
+        </section>
+
+        <section>
+          <h2>Ajustes</h2>
+          <label class="switch-row">
+            <span>Grade</span>
+            <input id="gridToggle" type="checkbox" checked />
+          </label>
+          <label class="switch-row">
+            <span>Snap</span>
+            <input id="snapToggle" type="checkbox" checked />
+          </label>
+          <label class="range-row">
+            <span>Passo</span>
+            <input id="gridSize" type="range" min="4" max="32" step="4" value="8" />
+            <b id="gridSizeText">8</b>
+          </label>
+        </section>
+
+        <section>
+          <h2>Resumo</h2>
+          <div id="stats" class="stats"></div>
+          <div id="warnings" class="warnings"></div>
+        </section>
+      </aside>
+
+      <main class="stage-column">
+        <div class="stage-toolbar">
+          <div class="view-readout">
+            <span id="cursorReadout">x 0, y 0</span>
+            <span id="zoomReadout">100%</span>
+          </div>
+          <div class="quick-actions">
+            <button id="undoBtn" class="icon-btn" title="Desfazer">&#8630;</button>
+            <button id="redoBtn" class="icon-btn" title="Refazer">&#8631;</button>
+            <button id="duplicateBtn" class="icon-btn" title="Duplicar">&#9633;+</button>
+            <button id="deleteBtn" class="icon-btn danger" title="Excluir">&times;</button>
+          </div>
+        </div>
+
+        <div id="stageWrap" class="stage-wrap">
+          <svg id="stage" class="stage" viewBox="0 0 960 540" aria-label="Editor de fase MMM">
+            <defs>
+              <pattern id="gridPattern" width="8" height="8" patternUnits="userSpaceOnUse">
+                <path d="M 8 0 L 0 0 0 8" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="1" />
+              </pattern>
+              <pattern id="deathPattern" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
+                <rect width="12" height="12" fill="rgba(192,0,0,.12)" />
+                <path d="M 0 0 L 0 12" stroke="rgba(255,0,0,.5)" stroke-width="2" />
+              </pattern>
+            </defs>
+            <rect class="slide-bg" x="0" y="0" width="960" height="540" />
+            <rect id="gridLayer" x="0" y="0" width="960" height="540" fill="url(#gridPattern)" />
+            <g id="objectLayer"></g>
+            <g id="overlayLayer"></g>
+          </svg>
+        </div>
+      </main>
+
+      <aside class="right-panel">
+        <section>
+          <h2>Propriedades</h2>
+          <div id="emptyInspector" class="empty-state">Nenhum objeto selecionado</div>
+          <form id="inspector" class="inspector hidden">
+            <label>
+              <span>Tipo</span>
+              <select id="propType"></select>
+            </label>
+            <label>
+              <span id="propNameLabel">Nome interno</span>
+              <input id="propName" type="text" spellcheck="false" />
+            </label>
+            <div class="prop-grid">
+              <label><span>Left</span><input id="propX" type="number" step="0.1" /></label>
+              <label><span>Top</span><input id="propY" type="number" step="0.1" /></label>
+              <label><span>Width</span><input id="propW" type="number" step="0.1" min="1" /></label>
+              <label><span>Height</span><input id="propH" type="number" step="0.1" min="1" /></label>
+            </div>
+            <label>
+              <span id="propTextLabel">Texto</span>
+              <input id="propText" type="text" spellcheck="false" />
+            </label>
+            <div id="movingFields" class="moving-fields hidden">
+              <label><span>Inicio</span><input id="moveMin" type="number" step="1" /></label>
+              <label><span>Fim</span><input id="moveMax" type="number" step="1" /></label>
+              <label><span>Velocidade</span><input id="moveSpeed" type="number" step="1" /></label>
+            </div>
+            <div class="color-grid">
+              <label><span>Fill</span><input id="propFill" type="color" /></label>
+              <label><span>Line</span><input id="propStroke" type="color" /></label>
+            </div>
+            <label class="switch-row">
+              <span>Travado</span>
+              <input id="propLocked" type="checkbox" />
+            </label>
+            <label class="switch-row">
+              <span>Oculto no início</span>
+              <input id="propHidden" type="checkbox" />
+            </label>
+            <div id="computedNote" class="computed-note"></div>
+            <div id="quickEdit" class="quick-edit hidden">
+              <button id="variantBtn" type="button" class="cmd compact">Alternar variação</button>
+              <button id="pairBtn" type="button" class="cmd compact">Criar par</button>
+              <button id="normalizeBtn" type="button" class="cmd compact">Auto organizar</button>
+            </div>
+          </form>
+        </section>
+
+        <section>
+          <h2>Camadas</h2>
+          <div id="layerList" class="layer-list"></div>
+        </section>
+      </aside>
+
+      <div id="contextMenu" class="context-menu hidden" role="menu">
+        <button data-action="copy">Copiar <span>Ctrl+C</span></button>
+        <button data-action="paste">Colar <span>Ctrl+V</span></button>
+        <button data-action="duplicate">Duplicar <span>Ctrl+D</span></button>
+        <button data-action="variant">Alternar variação <span>V</span></button>
+        <button data-action="lock">Travar / destravar</button>
+        <button data-action="bring-front">Trazer pra frente</button>
+        <button data-action="send-back">Enviar pro fundo</button>
+        <button data-action="pair-door">Criar par da porta</button>
+        <button data-action="delete" class="danger">Excluir</button>
+      </div>
+
+      <div id="exportPanel" class="export-panel hidden" role="dialog" aria-label="Exportar fase">
+        <div class="export-head">
+          <strong>JSON exportado</strong>
+          <button id="closeExportBtn" class="icon-btn" title="Fechar">&times;</button>
+        </div>
+        <textarea id="exportText" spellcheck="false"></textarea>
+        <div class="export-actions">
+          <button id="copyExportBtn" class="cmd primary">Copiar JSON</button>
+          <button id="downloadExportBtn" class="cmd">Baixar arquivo</button>
+        </div>
+      </div>
+
+      <div id="toast" class="toast hidden"></div>
+    </div>
+
+    <script src="./src/examples.js"></script>
+    <script src="./src/app.js"></script>
+  </body>
+</html>
