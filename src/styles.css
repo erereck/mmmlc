@@ -516,6 +516,17 @@ h2 {
   background: linear-gradient(135deg, transparent 0 35%, var(--yellow) 36% 42%, transparent 43% 58%, var(--yellow) 59% 65%, transparent 66%);
 }
 
+.spring-h-icon {
+  border-left: 3px solid var(--yellow);
+}
+
+.spring-h-icon::before {
+  content: "";
+  position: absolute;
+  inset: 2px 5px 2px 4px;
+  background: linear-gradient(45deg, transparent 0 35%, var(--yellow) 36% 42%, transparent 43% 58%, var(--yellow) 59% 65%, transparent 66%);
+}
+
 .spawn-icon {
   border: 2px solid var(--green);
   border-radius: 50%;

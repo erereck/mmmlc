@@ -23,6 +23,7 @@
     coin: { label: "Moeda", name: "#%", fill: "#000000", stroke: "#feec00", w: 20.5, h: 20.5 },
     portal: { label: "Portal", name: "#Portal", fill: "#000000", stroke: "#00c8ff", w: 29.76, h: 29.76 },
     spring: { label: "Mola", name: "#&", fill: "#000000", stroke: "#feec00", w: 37.26, h: 6.56 },
+    "spring-h": { label: "Mola horiz.", name: "#?", fill: "#000000", stroke: "#feec00", w: 6.56, h: 37.26 },
     spawn: { label: "Spawn", name: "Spawn", fill: "#000000", stroke: "#20b15a", w: 8.39, h: 8.39 },
     jump: { label: "Pulo+", name: "#^", fill: "#000000", stroke: "#feec00", w: 24, h: 24, text: "P" },
     speed: { label: "Vel+", name: "#^", fill: "#000000", stroke: "#297bff", w: 24, h: 24, text: "V" },
@@ -377,8 +378,10 @@
       else if (obj.type === "door-button-inv") obj.name = "#_";
       else if (obj.type === "door-platform") obj.name = `-Porta${obj.doorId}`;
       else if (obj.type === "door-platform-inv") obj.name = `_Porta${obj.doorId}`;
-    } else if (obj.type === "spring" && String(obj.text || "").trim() === "1") {
-      obj.text = "";
+    } else if (obj.type === "spring") {
+      obj.name = "#&";
+    } else if (obj.type === "spring-h") {
+      obj.name = "#?";
     }
     return obj;
   }
@@ -405,7 +408,7 @@
 
   function defaultTextFor(type, x = 0) {
     if (type === "portal") return "";
-    if (type === "spring") return "";
+    if (type === "spring" || type === "spring-h") return "";
     if (type === "toggle-platform") return "1.5";
     if (isMovingType(type)) return `${round(x)}.${round(x + 160)}.80`;
     if (isDoorType(type)) return nextDoorIdFor(type);
@@ -575,7 +578,10 @@
     if (obj.type === "death") data.killsPlayer = true;
     if (obj.type === "coin") data.collectible = "coin";
     if (obj.type === "portal") data.portalDestination = obj.text || "";
-    if (obj.type === "spring") data.springForce = String(obj.text || "").trim() === "" ? 1 : Number(String(obj.text).replace(",", "."));
+    if (obj.type === "spring" || obj.type === "spring-h") {
+      data.springForce = String(obj.text || "").trim() === "" ? 450 : Number(String(obj.text).replace(",", "."));
+      data.springAxis = obj.type === "spring-h" ? "x" : "y";
+    }
     if (obj.type === "toggle-platform") data.toggleInterval = Number(String(obj.text || "0").replace(",", "."));
     if (obj.type === "ice") data.surface = "ice";
     if (obj.type === "water") data.medium = "water";
@@ -910,7 +916,9 @@
       "big-player": "mini-player",
       "mini-player": "big-player",
       jump: "speed",
-      speed: "jump"
+      speed: "jump",
+      spring: "spring-h",
+      "spring-h": "spring"
     };
     return variants[type] || "";
   }
@@ -928,6 +936,8 @@
     if (obj.type === "gravity-all") return "Afetar um player";
     if (obj.type === "p1-platform") return "Trocar para P2";
     if (obj.type === "p2-platform") return "Trocar para P1";
+    if (obj.type === "spring") return "Virar horizontal";
+    if (obj.type === "spring-h") return "Virar vertical";
     if (isDoorType(obj.type)) return doorMode(obj.type) === "normal" ? "Inverter porta" : "Porta normal";
     return `Virar ${typeLabel(nextType)}`;
   }
@@ -985,7 +995,6 @@
       obj.movingSpeed = Number.isFinite(data.speed) && data.speed !== 0 ? data.speed : 80;
       obj.x = obj.movingMin;
     }
-    if (obj.type === "spring" && String(obj.text || "").trim() === "1") obj.text = "";
     syncObjectInternals(obj);
     ensurePositiveRect(obj);
     saveLocal();
@@ -1063,7 +1072,7 @@
         const interval = Number(String(obj.text || "").replace(",", "."));
         if (!Number.isFinite(interval) || interval <= 0) warnings.push(`${displayName(obj)} sem intervalo valido`);
       }
-      if (obj.type === "spring" && String(obj.text || "").trim() !== "") {
+      if ((obj.type === "spring" || obj.type === "spring-h") && String(obj.text || "").trim() !== "") {
         const force = Number(String(obj.text).replace(",", "."));
         if (!Number.isFinite(force) || force === 0) warnings.push(`${displayName(obj)} com forca invalida`);
       }
@@ -1165,8 +1174,8 @@
     } else if (obj.type === "gravity") {
       els.propTextLabel.textContent = "Texto";
       els.computedNote.textContent = "Auto: nome #!, texto vazio. Afeta somente quem pegou.";
-    } else if (obj.type === "spring") {
-      els.propTextLabel.textContent = "Forca (vazio = 1)";
+    } else if (obj.type === "spring" || obj.type === "spring-h") {
+      els.propTextLabel.textContent = "Forca (vazio = 450)";
     } else if (obj.type === "portal") {
       els.propTextLabel.textContent = "Destino";
     } else if (obj.type === "toggle-platform") {
@@ -1191,7 +1200,7 @@
 
     if (obj.type === "coin") drawCoin(g, obj);
     else if (obj.type === "portal") drawPortal(g, obj);
-    else if (obj.type === "spring") drawSpring(g, obj);
+    else if (obj.type === "spring" || obj.type === "spring-h") drawSpring(g, obj);
     else if (obj.type === "spawn") drawSpawn(g, obj);
     else if (obj.type === "death") drawDeath(g, obj);
     else if (obj.type === "water") drawWater(g, obj);
@@ -1296,6 +1305,7 @@
 
   function displayName(obj) {
     if (obj.type === "spring" && !obj.text) return "#&";
+    if (obj.type === "spring-h" && !obj.text) return "#?";
     if (obj.type === "door-button") return `Botao ${parseDoorId(obj)}`;
     if (obj.type === "door-button-inv") return `Botao inv ${parseDoorId(obj)}`;
     if (obj.type === "door-platform") return `Porta ${parseDoorId(obj)}`;
@@ -1453,6 +1463,20 @@
 
   function drawSpring(g, obj) {
     g.appendChild(svgEl("rect", commonRectAttrs(obj, { fill: "#000000", stroke: "#feec00" })));
+    if (obj.type === "spring-h") {
+      const x = obj.x + obj.w / 2;
+      const top = obj.y + 4;
+      const bottom = obj.y + obj.h - 4;
+      const mid = (top + bottom) / 2;
+      g.appendChild(svgEl("polyline", {
+        points: `${x},${top} ${obj.x + obj.w - 1},${top + 8} ${obj.x + 1},${mid} ${obj.x + obj.w - 1},${bottom - 8} ${x},${bottom}`,
+        fill: "none",
+        stroke: "#feec00",
+        "stroke-width": 1.2,
+        "vector-effect": "non-scaling-stroke"
+      }));
+      return;
+    }
     const y = obj.y + obj.h / 2;
     const left = obj.x + 4;
     const right = obj.x + obj.w - 4;
@@ -1742,7 +1766,7 @@
     const p = pointFromEvent(e);
     const type = state.tool;
     const meta = typeMeta[type] || fallbackMeta;
-    const fixed = ["coin", "portal", "spring", "spawn", "jump", "speed", "gravity", "gravity-all", "big-player", "mini-player", "door-button", "door-button-inv"].includes(type);
+    const fixed = ["coin", "portal", "spring", "spring-h", "spawn", "jump", "speed", "gravity", "gravity-all", "big-player", "mini-player", "door-button", "door-button-inv"].includes(type);
     pushHistory();
     let obj;
     if (fixed) {
