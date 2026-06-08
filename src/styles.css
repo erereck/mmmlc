@@ -986,6 +986,19 @@ input[type="range"] {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.inspector .move-toggle {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  min-height: 30px;
+}
+
+.moving-fields input:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
 .color-grid input {
   padding: 0 4px;
 }

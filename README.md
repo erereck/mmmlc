@@ -4,7 +4,7 @@ Editor estatico para criar prototipos de fases do MMM Overdose no mesmo canvas 9
 
 Inclui os 13 exemplos jogaveis do pacote Legacy sem decoracao, mais ferramentas para plataformas, morte, moeda, portal, mola, agua, gelo, powerups, gravidade, gravidade global de coop, portas e barreiras de player/co-op.
 
-O editor esconde as sintaxes internas sempre que possivel. Portas usam ID amigavel, molas vazias valem forca 1, e plataformas moveis usam campos separados de inicio, fim e velocidade enquanto o texto interno e gerado automaticamente. Variações como plataforma ghost, barreira P2, porta invertida e gravidade global ficam no botao **Alternar variacao** do inspetor.
+O editor esconde as sintaxes internas sempre que possivel. Portas usam ID amigavel, molas vazias valem forca 1, e plataformas moveis usam campos separados de inicio, fim e velocidade enquanto o texto interno e gerado automaticamente. Outros objetos tambem podem ser marcados como moveis; nesse caso o movimento sai como sufixo no nome (`#?'120.420.90`) e o texto continua livre para forca, ID ou tipo. Variações como plataforma ghost, barreira P2, porta invertida e gravidade global ficam no botao **Alternar variacao** do inspetor.
 
 Atalhos uteis: `Ctrl+C`, `Ctrl+V`, `Ctrl+D`, `V`, `Delete`, setas para mover, `Shift+setas` para mover mais rapido e botao direito para acoes rapidas do objeto.
 
