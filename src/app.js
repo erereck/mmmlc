@@ -2,7 +2,7 @@
   const SVG_NS = "http://www.w3.org/2000/svg";
   const SLIDE_W = 960;
   const SLIDE_H = 540;
-  const CREATOR_VERSION = "0.5.0";
+  const CREATOR_VERSION = "0.5.1";
   const STORAGE_KEY = "mmm-level-creator-v2";
   const LEGACY_STORAGE_KEY = "mmm-level-creator-v1";
 
@@ -321,7 +321,10 @@
     }
 
     obj.name = stripMovementSuffix(obj.name) || typeMeta[obj.type]?.name || fallbackMeta.name;
-    if (obj.movingEnabled) setMovingText(obj);
+    if (obj.movingEnabled) {
+      obj.x = obj.movingMin;
+      setMovingText(obj);
+    }
   }
 
   function isDoorButtonType(type) {
