@@ -46,14 +46,14 @@ button {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 340px minmax(420px, 1fr) 320px;
+  grid-template-columns: 360px minmax(420px, 1fr) 330px;
   grid-template-rows: auto 1fr;
   width: 100vw;
   height: 100vh;
 }
 
 .app-shell.right-hidden {
-  grid-template-columns: 340px minmax(420px, 1fr) 0;
+  grid-template-columns: 360px minmax(420px, 1fr) 0;
 }
 
 .topbar {
@@ -208,7 +208,7 @@ button {
   overflow: auto;
   overflow-x: hidden;
   border-right: 1px solid var(--line);
-  background: var(--panel);
+  background: #111111;
   padding: 14px;
 }
 
@@ -243,10 +243,24 @@ button {
 
 .tabs-collapsed .tabs-section {
   margin-bottom: 0;
+  border-color: rgba(41, 123, 255, .5);
 }
 
 section + section {
   margin-top: 18px;
+}
+
+.left-panel section,
+.right-panel section {
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #151515;
+  padding: 12px;
+}
+
+.left-panel section + section,
+.right-panel section + section {
+  margin-top: 12px;
 }
 
 section,
@@ -319,6 +333,7 @@ h2 {
 }
 
 .tool {
+  position: relative;
   display: grid;
   grid-template-columns: 22px 1fr;
   align-items: center;
@@ -328,6 +343,15 @@ h2 {
   text-align: left;
   font-size: 12px;
   min-width: 0;
+  overflow: hidden;
+}
+
+.tool::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: transparent;
 }
 
 .tool span:last-child {
@@ -339,8 +363,12 @@ h2 {
 
 .tool.active {
   border-color: var(--blue);
-  background: #14284d;
+  background: #0f2347;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+}
+
+.tool.active::before {
+  background: var(--blue);
 }
 
 .tool-icon {
@@ -984,6 +1012,18 @@ input[type="range"] {
 
 .moving-fields {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.moving-fields,
+.toggle-fields {
+  border: 1px solid rgba(65, 162, 255, .24);
+  border-radius: 7px;
+  background: #0c0c0c;
+  padding: 8px;
+}
+
+.toggle-fields {
+  border-color: rgba(164, 124, 255, .32);
 }
 
 .inspector .move-toggle,

@@ -32,7 +32,7 @@
           <div class="section-head">
             <h2>Fases</h2>
             <div class="section-actions">
-              <button id="toggleTabsBtn" class="mini-btn" title="Ocultar lista de fases">Ocultar</button>
+              <button id="toggleTabsBtn" class="mini-btn" title="Mostrar lista de fases">Mostrar</button>
               <button id="addTabBtn" class="mini-btn" title="Criar nova fase">+</button>
               <button id="removeTabBtn" class="mini-btn danger" title="Excluir fase atual">&times;</button>
             </div>
@@ -48,9 +48,7 @@
             <button class="tool" data-tool="pan" title="Arrastar a camera do editor"><span class="tool-icon pan-icon"></span><span>Mover tela</span></button>
 
             <div class="tool-group-title">Blocos</div>
-            <button class="tool" data-tool="platform" title="Plataforma normal: nome $"><span class="tool-icon platform-icon"></span><span>Plataforma</span></button>
-            <button class="tool" data-tool="moving-platform" title="Plataforma movel horizontal. Use Alternar no inspector para virar ghost"><span class="tool-icon moving-icon"></span><span>Movel</span></button>
-            <button class="tool" data-tool="toggle-platform" title="Plataforma que liga/desliga pelo intervalo do texto"><span class="tool-icon toggle-icon"></span><span>Temporaria</span></button>
+            <button class="tool" data-tool="platform" title="Plataforma base. Ative Movel ou Temporaria nas propriedades"><span class="tool-icon platform-icon"></span><span>Plataforma</span></button>
             <button class="tool" data-tool="ice" title="Plataforma escorregadia: nome #="><span class="tool-icon ice-icon"></span><span>Gelo</span></button>
             <button class="tool" data-tool="death" title="Bloco que mata: nome #@"><span class="tool-icon death-icon"></span><span>Morte</span></button>
 
@@ -167,6 +165,10 @@
               <label><span>Velocidade</span><input id="moveSpeed" type="number" step="1" /></label>
             </div>
             <div id="toggleFields" class="toggle-fields hidden">
+              <label class="switch-row">
+                <span>Temporaria</span>
+                <input id="toggleEnabled" type="checkbox" />
+              </label>
               <label class="switch-row">
                 <span>Comeca invisivel</span>
                 <input id="toggleInverted" type="checkbox" />

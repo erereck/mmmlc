@@ -2,15 +2,15 @@
   const SVG_NS = "http://www.w3.org/2000/svg";
   const SLIDE_W = 960;
   const SLIDE_H = 540;
-  const CREATOR_VERSION = "0.6.0";
+  const CREATOR_VERSION = "0.7.0";
   const STORAGE_KEY = "mmm-level-creator-v2";
   const LEGACY_STORAGE_KEY = "mmm-level-creator-v1";
 
   const fallbackMeta = { label: "Objeto", name: "Objeto", fill: "#000000", stroke: "#ffffff", w: 80, h: 12 };
   const removedDecorationTypes = new Set(["decor", "grass", "hub-door"]);
-  const advancedVariantTypes = new Set(["moving-ghost", "p2-platform", "gravity-all", "door-button-inv", "door-platform-inv"]);
+  const advancedVariantTypes = new Set(["moving-platform", "moving-ghost", "toggle-platform", "p2-platform", "gravity-all", "door-button-inv", "door-platform-inv"]);
   const movementCapableTypes = new Set([
-    "p1-platform", "p2-platform", "toggle-platform", "ice", "water", "death", "coin", "portal",
+    "platform", "p1-platform", "p2-platform", "toggle-platform", "ice", "water", "death", "coin", "portal",
     "spring", "spring-h", "jump", "speed", "gravity", "gravity-all", "big-player", "mini-player",
     "door-button", "door-button-inv", "door-platform", "door-platform-inv"
   ]);
@@ -55,7 +55,7 @@
     drag: null,
     spaceDown: false,
     clipboard: null,
-    tabsCollapsed: false,
+    tabsCollapsed: true,
     rightHidden: false,
     lastPointer: { x: SLIDE_W / 2, y: SLIDE_H / 2 },
     history: [],
@@ -99,6 +99,7 @@
     moveMax: document.getElementById("moveMax"),
     moveSpeed: document.getElementById("moveSpeed"),
     toggleFields: document.getElementById("toggleFields"),
+    toggleEnabled: document.getElementById("toggleEnabled"),
     toggleInverted: document.getElementById("toggleInverted"),
     propFill: document.getElementById("propFill"),
     propStroke: document.getElementById("propStroke"),
@@ -227,6 +228,10 @@
     return Object.entries(typeMeta).filter(([type]) => !advancedVariantTypes.has(type) || type === currentType);
   }
 
+  function isPlatformFamily(type) {
+    return type === "platform" || type === "toggle-platform";
+  }
+
   function colorSafe(color, fallback = "#000000") {
     if (!color || color === "transparent") return fallback;
     if (/^#[0-9a-f]{6}$/i.test(color)) return color;
@@ -246,7 +251,7 @@
   }
 
   function movementAxis(obj) {
-    if (!obj || isMovingType(obj.type)) return "x";
+    if (!obj) return "x";
     return String(obj.movingAxis || "").toLowerCase() === "y" ? "y" : "x";
   }
 
@@ -315,9 +320,9 @@
     obj.movingMin = round(Number.isFinite(Number(obj.movingMin)) ? Number(obj.movingMin) : data.min);
     obj.movingMax = round(Number.isFinite(Number(obj.movingMax)) ? Number(obj.movingMax) : data.max);
     obj.movingSpeed = round(Number.isFinite(Number(obj.movingSpeed)) ? Number(obj.movingSpeed) : data.speed);
-    obj.movingAxis = isMovingType(obj.type) ? "x" : (data.axis === "y" ? "y" : "x");
+    obj.movingAxis = data.axis === "y" ? "y" : "x";
     if (isMovingType(obj.type)) {
-      obj.text = `${obj.movingMin}.${obj.movingMax}.${obj.movingSpeed}`;
+      obj.text = movementSpec(obj);
     } else if (obj.movingEnabled) {
       const base = stripMovementSuffix(obj.name) || typeMeta[obj.type]?.name || fallbackMeta.name;
       obj.name = `${base}'${movementSpec(obj)}`;
@@ -328,9 +333,9 @@
     if (!hasMovement(obj)) return null;
     const fallbackAxis = movementAxis(obj);
     const parsed = isMovingType(obj.type)
-      ? parseMovingText(obj.text, obj.x, obj.y, "x")
+      ? parseMovingText(obj.text, obj.x, obj.y, fallbackAxis)
       : (parseMovingSuffix(obj.name, obj.x, obj.y) || parseMovingText("", obj.x, obj.y, fallbackAxis));
-    const axis = isMovingType(obj.type) ? "x" : (obj.movingAxis === "y" || parsed.axis === "y" ? "y" : "x");
+    const axis = obj.movingAxis === "y" || parsed.axis === "y" ? "y" : "x";
     return {
       axis,
       min: Number.isFinite(Number(obj.movingMin)) ? Number(obj.movingMin) : parsed.min,
@@ -346,14 +351,14 @@
     }
 
     const parsed = movingData(obj) || parseMovingSuffix(obj.name, obj.x, obj.y) || parseMovingText(isMovingType(obj.type) ? obj.text : "", obj.x, obj.y, movementAxis(obj));
-    obj.movingAxis = isMovingType(obj.type) ? "x" : (obj.movingAxis === "y" || parsed.axis === "y" ? "y" : "x");
+    obj.movingAxis = obj.movingAxis === "y" || parsed.axis === "y" ? "y" : "x";
     const startCoord = movementCoord(obj, obj.movingAxis);
     obj.movingMin = round(Number.isFinite(Number(parsed.min)) ? Number(parsed.min) : startCoord);
     obj.movingMax = round(Number.isFinite(Number(parsed.max)) && Number(parsed.max) > obj.movingMin ? Number(parsed.max) : obj.movingMin + 160);
     obj.movingSpeed = round(Number.isFinite(Number(parsed.speed)) && Number(parsed.speed) !== 0 ? Number(parsed.speed) : 80);
 
     if (isMovingType(obj.type)) {
-      obj.x = obj.movingMin;
+      setMovementCoord(obj, obj.movingMin, obj.movingAxis);
       const suffix = movingSuffix(obj.type);
       const base = stripMovementSuffix(obj.name || "$") || "$";
       obj.name = `${base}${suffix}`;
@@ -644,11 +649,9 @@
         const rawName = obj.name || meta.name;
         const x = Number.isFinite(Number(obj.x)) ? Number(obj.x) : 0;
         const y = Number.isFinite(Number(obj.y)) ? Number(obj.y) : 0;
-        const nameMovement = !isMovingType(type) ? parseMovingSuffix(rawName, x, y) : null;
+        const nameMovement = parseMovingSuffix(rawName, x, y);
         const gameplayMoving = obj.gameplay?.moving || null;
-        const movingAxis = isMovingType(type)
-          ? "x"
-          : (String(obj.movingAxis || gameplayMoving?.axis || nameMovement?.axis || "").toLowerCase() === "y" ? "y" : "x");
+        const movingAxis = String(obj.movingAxis || gameplayMoving?.axis || nameMovement?.axis || "").toLowerCase() === "y" ? "y" : "x";
         return {
           id: obj.id || `obj-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
           name: rawName,
@@ -798,7 +801,7 @@
   }
 
   function exportShapeName(obj, index) {
-    if (obj.type === "platform") return `$${index}`;
+    if (obj.type === "platform") return hasMovement(obj) ? obj.name : `$${index}`;
     return obj.name;
   }
 
@@ -1047,6 +1050,8 @@
 
   function variantType(type) {
     const variants = {
+      platform: "toggle-platform",
+      "toggle-platform": "platform",
       "moving-platform": "moving-ghost",
       "moving-ghost": "moving-platform",
       "p1-platform": "p2-platform",
@@ -1074,6 +1079,8 @@
   function variantButtonText(obj) {
     if (!obj || !canCycleVariant(obj)) return "Sem variação";
     const nextType = variantType(obj.type);
+    if (obj.type === "platform") return "Virar temporaria";
+    if (obj.type === "toggle-platform") return "Virar fixa";
     if (obj.type === "moving-platform") return "Virar ghost";
     if (obj.type === "moving-ghost") return "Virar colidível";
     if (obj.type === "gravity") return "Afetar todos";
@@ -1101,6 +1108,12 @@
     const oldDoorId = isDoorType(obj.type) ? parseDoorId(obj) : "";
     obj.type = nextType;
     applyTypeVisualDefaults(obj);
+    if (nextType === "platform") {
+      obj.text = "";
+      obj.toggleStartHidden = false;
+    } else if (nextType === "toggle-platform" && String(obj.text || "").trim() === "") {
+      obj.text = "1.5";
+    }
     if (oldDoorId) {
       obj.text = oldDoorId;
       obj.doorId = oldDoorId;
@@ -1291,19 +1304,21 @@
     els.propName.disabled = autoName;
     const canMove = canMoveType(obj.type);
     const movingOn = hasMovement(obj);
+    const platformFamily = isPlatformFamily(obj.type);
     els.movingFields.classList.toggle("hidden", !canMove);
-    els.toggleFields.classList.toggle("hidden", obj.type !== "toggle-platform");
+    els.toggleFields.classList.toggle("hidden", !platformFamily);
+    if (els.toggleEnabled) els.toggleEnabled.checked = obj.type === "toggle-platform";
     if (els.toggleInverted) els.toggleInverted.checked = toggleStartsInvisible(obj);
-    textField.classList.toggle("compact-hidden", isMovingType(obj.type) || obj.type === "gravity-all");
+    textField.classList.toggle("compact-hidden", isMovingType(obj.type) || obj.type === "gravity-all" || obj.type === "platform");
     if (els.moveEnabled) {
       els.moveEnabled.checked = movingOn;
-      els.moveEnabled.disabled = isMovingType(obj.type);
+      els.moveEnabled.disabled = false;
     }
     if (els.moveAxis) {
       els.moveAxis.value = movementAxis(obj);
-      els.moveAxis.disabled = !movingOn || isMovingType(obj.type);
+      els.moveAxis.disabled = !movingOn;
     }
-    if (els.moveAxisLabel) els.moveAxisLabel.classList.toggle("compact-hidden", isMovingType(obj.type));
+    if (els.moveAxisLabel) els.moveAxisLabel.classList.toggle("compact-hidden", false);
     [els.moveMin, els.moveMax, els.moveSpeed].forEach((input) => {
       input.disabled = canMove && !movingOn;
     });
@@ -1324,6 +1339,9 @@
     if (isMovingType(obj.type)) {
       els.propTextLabel.textContent = "Texto interno";
       els.computedNote.textContent = `Auto: nome ${obj.name}, texto ${obj.text}. O motor inicia a plataforma no Inicio e move ate o Fim.`;
+    } else if (obj.type === "platform") {
+      els.propTextLabel.textContent = "Texto";
+      els.computedNote.textContent = "Plataforma base. Use Movel para gerar sufixo automatico ou Temporaria para virar #- sem editar nome.";
     } else if (isDoorType(obj.type)) {
       els.propText.value = parseDoorId(obj);
       els.propTextLabel.textContent = "ID da porta";
@@ -1353,7 +1371,7 @@
       els.propTextLabel.textContent = "Texto";
     }
 
-    if (canMove && movingOn && !isMovingType(obj.type)) {
+    if (canMove && movingOn) {
       const note = `Movel: nome ${obj.name}. O texto do objeto continua ${obj.text || "vazio"}.`;
       els.computedNote.textContent = els.computedNote.textContent ? `${els.computedNote.textContent} ${note}` : note;
     }
@@ -1378,6 +1396,7 @@
     else if (obj.type === "spawn") drawSpawn(g, obj);
     else if (obj.type === "death") drawDeath(g, obj);
     else if (obj.type === "water") drawWater(g, obj);
+    else if (obj.type === "platform" && hasMovement(obj)) drawMovingBasePlatform(g, obj);
     else if (obj.type === "moving-platform" || obj.type === "moving-ghost") drawMovingPlatform(g, obj);
     else if (["p1-platform", "p2-platform", "toggle-platform", "ice"].includes(obj.type)) drawSpecialPlatform(g, obj);
     else if (["jump", "speed", "gravity", "gravity-all", "big-player", "mini-player", "door-button", "door-button-inv"].includes(obj.type)) drawBadgeObject(g, obj);
@@ -1419,6 +1438,21 @@
   function drawRectObject(g, obj) {
     const rx = obj.type === "platform" ? 0 : 1;
     g.appendChild(svgEl("rect", commonRectAttrs(obj, { rx })));
+  }
+
+  function drawMovingBasePlatform(g, obj) {
+    const y = obj.y + obj.h / 2;
+    g.appendChild(svgEl("rect", commonRectAttrs(obj, { rx: 0, stroke: "#41a2ff" })));
+    g.appendChild(svgEl("line", {
+      x1: obj.x + 5,
+      y1: y,
+      x2: obj.x + obj.w - 5,
+      y2: y,
+      stroke: "rgba(65,162,255,.7)",
+      "stroke-width": 1,
+      "stroke-dasharray": "5 4",
+      "vector-effect": "non-scaling-stroke"
+    }));
   }
 
   function drawMovingPlatform(g, obj) {
@@ -1492,6 +1526,9 @@
   }
 
   function displayName(obj) {
+    if (obj.type === "platform" && hasMovement(obj)) return "Plataforma movel";
+    if (obj.type === "toggle-platform" && hasMovement(obj)) return "Temporaria movel";
+    if (obj.type === "toggle-platform") return "Temporaria";
     if (obj.type === "spring" && !obj.text) return "#&";
     if (obj.type === "spring-h" && !obj.text) return "#?";
     if (obj.type === "door-button") return `Botao ${parseDoorId(obj)}`;
@@ -1858,6 +1895,7 @@
     document.querySelector(".app-shell").classList.toggle("tabs-collapsed", state.tabsCollapsed);
     document.querySelector(".app-shell").classList.toggle("right-hidden", state.rightHidden);
     els.toggleTabsBtn.textContent = state.tabsCollapsed ? "Mostrar" : "Ocultar";
+    els.toggleTabsBtn.title = state.tabsCollapsed ? "Mostrar lista de fases" : "Ocultar lista de fases";
     els.toggleRightBtn.textContent = state.rightHidden ? "Mostrar insp." : "Inspetor";
     document.getElementById("useExampleBtn").disabled = false;
     document.getElementById("useExampleBtn").textContent = activeTab().example ? "Usar como base" : "Duplicar fase";
@@ -2347,7 +2385,7 @@
 
   function setSelectedMovementAxis(axis) {
     const obj = selectedObject();
-    if (!obj || !canMoveType(obj.type) || isMovingType(obj.type)) return;
+    if (!obj || !canMoveType(obj.type)) return;
     pushHistory();
     obj.movingEnabled = true;
     obj.movingAxis = axis === "y" ? "y" : "x";
@@ -2365,6 +2403,25 @@
     if (!obj || obj.type !== "toggle-platform") return;
     pushHistory();
     setTogglePlatformText(obj, toggleIntervalValue(obj), startsInvisible);
+    syncObjectInternals(obj);
+    saveLocal();
+    render();
+  }
+
+  function setSelectedToggleEnabled(enabled) {
+    const obj = selectedObject();
+    if (!obj || !isPlatformFamily(obj.type)) return;
+    pushHistory();
+    if (enabled && obj.type !== "toggle-platform") {
+      obj.type = "toggle-platform";
+      if (String(obj.text || "").trim() === "") obj.text = "1.5";
+      applyTypeVisualDefaults(obj);
+    } else if (!enabled && obj.type === "toggle-platform") {
+      obj.type = "platform";
+      obj.text = "";
+      obj.toggleStartHidden = false;
+      applyTypeVisualDefaults(obj);
+    }
     syncObjectInternals(obj);
     saveLocal();
     render();
@@ -2436,7 +2493,7 @@
     if (els.moveEnabled) {
       els.moveEnabled.addEventListener("change", () => {
         const obj = selectedObject();
-        if (!obj || isMovingType(obj.type) || !canMoveType(obj.type)) return;
+        if (!obj || !canMoveType(obj.type)) return;
         pushHistory();
         obj.movingEnabled = els.moveEnabled.checked;
         if (obj.movingEnabled) {
@@ -2456,6 +2513,9 @@
     bindMoving(els.moveSpeed, "movingSpeed");
     if (els.moveAxis) {
       els.moveAxis.addEventListener("change", () => setSelectedMovementAxis(els.moveAxis.value));
+    }
+    if (els.toggleEnabled) {
+      els.toggleEnabled.addEventListener("change", () => setSelectedToggleEnabled(els.toggleEnabled.checked));
     }
     if (els.toggleInverted) {
       els.toggleInverted.addEventListener("change", () => setSelectedToggleInverted(els.toggleInverted.checked));
