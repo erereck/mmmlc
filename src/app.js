@@ -134,14 +134,14 @@
   }
 
   function defaultSettings() {
-    return { spatial: false, gravityScale: 0.33 };
+    return { spatial: false, gravityScale: "1/3" };
   }
 
   function sanitizeSettings(settings = {}) {
     const clean = defaultSettings();
     clean.spatial = !!settings.spatial;
-    const scale = Number(settings.gravityScale);
-    clean.gravityScale = Number.isFinite(scale) && scale > 0 ? round(scale) : clean.gravityScale;
+    const rawScale = String(settings.gravityScale ?? clean.gravityScale).trim();
+    clean.gravityScale = rawScale || clean.gravityScale;
     return clean;
   }
 
