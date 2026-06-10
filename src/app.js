@@ -2,7 +2,7 @@
   const SVG_NS = "http://www.w3.org/2000/svg";
   const SLIDE_W = 960;
   const SLIDE_H = 540;
-  const CREATOR_VERSION = "0.5.1";
+  const CREATOR_VERSION = "0.6.0";
   const STORAGE_KEY = "mmm-level-creator-v2";
   const LEGACY_STORAGE_KEY = "mmm-level-creator-v1";
 
@@ -93,9 +93,13 @@
     propTextLabel: document.getElementById("propTextLabel"),
     movingFields: document.getElementById("movingFields"),
     moveEnabled: document.getElementById("moveEnabled"),
+    moveAxis: document.getElementById("moveAxis"),
+    moveAxisLabel: document.getElementById("moveAxisLabel"),
     moveMin: document.getElementById("moveMin"),
     moveMax: document.getElementById("moveMax"),
     moveSpeed: document.getElementById("moveSpeed"),
+    toggleFields: document.getElementById("toggleFields"),
+    toggleInverted: document.getElementById("toggleInverted"),
     propFill: document.getElementById("propFill"),
     propStroke: document.getElementById("propStroke"),
     propLocked: document.getElementById("propLocked"),
@@ -241,6 +245,24 @@
     return !!obj && (isMovingType(obj.type) || (!!obj.movingEnabled && canMoveType(obj.type)));
   }
 
+  function movementAxis(obj) {
+    if (!obj || isMovingType(obj.type)) return "x";
+    return String(obj.movingAxis || "").toLowerCase() === "y" ? "y" : "x";
+  }
+
+  function movementCoord(obj, axis = movementAxis(obj)) {
+    return axis === "y" ? Number(obj?.y || 0) : Number(obj?.x || 0);
+  }
+
+  function movementSize(obj, axis = movementAxis(obj)) {
+    return axis === "y" ? Number(obj?.h || 0) : Number(obj?.w || 0);
+  }
+
+  function setMovementCoord(obj, value, axis = movementAxis(obj)) {
+    if (axis === "y") obj.y = round(value);
+    else obj.x = round(value);
+  }
+
   function movingSuffix(type) {
     return type === "moving-ghost" ? "''" : "'";
   }
@@ -251,49 +273,66 @@
     return index > 0 ? raw.slice(0, index) : raw;
   }
 
-  function parseMovingText(text, x = 0) {
-    const parts = String(text || "").split(".");
+  function parseMovingText(text, x = 0, y = 0, fallbackAxis = "x") {
+    let raw = String(text || "").trim();
+    let axis = fallbackAxis === "y" ? "y" : "x";
+    const prefix = raw.slice(0, 2).toUpperCase();
+    if (prefix === "Y:") {
+      axis = "y";
+      raw = raw.slice(2);
+    } else if (prefix === "X:") {
+      axis = "x";
+      raw = raw.slice(2);
+    }
+    const parts = raw.split(".");
     const min = Number(parts[0]);
     const max = Number(parts[1]);
     const speed = Number(parts[2]);
-    const start = Number.isFinite(min) ? min : round(x);
+    const start = Number.isFinite(min) ? min : round(axis === "y" ? y : x);
     return {
+      axis,
       min: start,
       max: Number.isFinite(max) ? max : round(start + 160),
       speed: Number.isFinite(speed) ? speed : 80
     };
   }
 
-  function parseMovingSuffix(name, x = 0) {
+  function parseMovingSuffix(name, x = 0, y = 0) {
     const raw = String(name || "");
     const index = raw.indexOf("'");
     if (index < 0 || index >= raw.length - 1) return null;
-    return parseMovingText(raw.slice(index + 1), x);
+    return parseMovingText(raw.slice(index + 1), x, y);
   }
 
   function movementSpec(obj) {
-    const data = movingData(obj) || parseMovingText("", obj?.x || 0);
-    return `${round(data.min)}.${round(data.max)}.${round(data.speed)}`;
+    const data = movingData(obj) || parseMovingText("", obj?.x || 0, obj?.y || 0, movementAxis(obj));
+    const prefix = data.axis === "y" ? "Y:" : "";
+    return `${prefix}${round(data.min)}.${round(data.max)}.${round(data.speed)}`;
   }
 
   function setMovingText(obj) {
-    obj.movingMin = round(Number(obj.movingMin));
-    obj.movingMax = round(Number(obj.movingMax));
-    obj.movingSpeed = round(Number(obj.movingSpeed));
+    const data = movingData(obj) || parseMovingText("", obj?.x || 0, obj?.y || 0, movementAxis(obj));
+    obj.movingMin = round(Number.isFinite(Number(obj.movingMin)) ? Number(obj.movingMin) : data.min);
+    obj.movingMax = round(Number.isFinite(Number(obj.movingMax)) ? Number(obj.movingMax) : data.max);
+    obj.movingSpeed = round(Number.isFinite(Number(obj.movingSpeed)) ? Number(obj.movingSpeed) : data.speed);
+    obj.movingAxis = isMovingType(obj.type) ? "x" : (data.axis === "y" ? "y" : "x");
     if (isMovingType(obj.type)) {
       obj.text = `${obj.movingMin}.${obj.movingMax}.${obj.movingSpeed}`;
     } else if (obj.movingEnabled) {
       const base = stripMovementSuffix(obj.name) || typeMeta[obj.type]?.name || fallbackMeta.name;
-      obj.name = `${base}'${obj.movingMin}.${obj.movingMax}.${obj.movingSpeed}`;
+      obj.name = `${base}'${movementSpec(obj)}`;
     }
   }
 
   function movingData(obj) {
     if (!hasMovement(obj)) return null;
+    const fallbackAxis = movementAxis(obj);
     const parsed = isMovingType(obj.type)
-      ? parseMovingText(obj.text, obj.x)
-      : (parseMovingSuffix(obj.name, obj.x) || parseMovingText("", obj.x));
+      ? parseMovingText(obj.text, obj.x, obj.y, "x")
+      : (parseMovingSuffix(obj.name, obj.x, obj.y) || parseMovingText("", obj.x, obj.y, fallbackAxis));
+    const axis = isMovingType(obj.type) ? "x" : (obj.movingAxis === "y" || parsed.axis === "y" ? "y" : "x");
     return {
+      axis,
       min: Number.isFinite(Number(obj.movingMin)) ? Number(obj.movingMin) : parsed.min,
       max: Number.isFinite(Number(obj.movingMax)) ? Number(obj.movingMax) : parsed.max,
       speed: Number.isFinite(Number(obj.movingSpeed)) ? Number(obj.movingSpeed) : parsed.speed
@@ -306,8 +345,10 @@
       return;
     }
 
-    const parsed = movingData(obj) || parseMovingSuffix(obj.name, obj.x) || parseMovingText(isMovingType(obj.type) ? obj.text : "", obj.x);
-    obj.movingMin = round(Number.isFinite(Number(parsed.min)) ? Number(parsed.min) : obj.x);
+    const parsed = movingData(obj) || parseMovingSuffix(obj.name, obj.x, obj.y) || parseMovingText(isMovingType(obj.type) ? obj.text : "", obj.x, obj.y, movementAxis(obj));
+    obj.movingAxis = isMovingType(obj.type) ? "x" : (obj.movingAxis === "y" || parsed.axis === "y" ? "y" : "x");
+    const startCoord = movementCoord(obj, obj.movingAxis);
+    obj.movingMin = round(Number.isFinite(Number(parsed.min)) ? Number(parsed.min) : startCoord);
     obj.movingMax = round(Number.isFinite(Number(parsed.max)) && Number(parsed.max) > obj.movingMin ? Number(parsed.max) : obj.movingMin + 160);
     obj.movingSpeed = round(Number.isFinite(Number(parsed.speed)) && Number(parsed.speed) !== 0 ? Number(parsed.speed) : 80);
 
@@ -322,7 +363,7 @@
 
     obj.name = stripMovementSuffix(obj.name) || typeMeta[obj.type]?.name || fallbackMeta.name;
     if (obj.movingEnabled) {
-      obj.x = obj.movingMin;
+      setMovementCoord(obj, obj.movingMin, obj.movingAxis);
       setMovingText(obj);
     }
   }
@@ -422,6 +463,9 @@
     } else if (obj.type === "p1-platform" || obj.type === "p2-platform") {
       obj.name = obj.type === "p1-platform" ? "#1" : "#2";
       obj.text = "";
+    } else if (obj.type === "toggle-platform") {
+      obj.name = "#-";
+      setTogglePlatformText(obj);
     } else if (obj.type === "jump" || obj.type === "speed") {
       obj.name = "#^";
       obj.text = obj.type === "jump" ? "P" : "V";
@@ -472,6 +516,26 @@
     if (isMovingType(type)) return `${round(x)}.${round(x + 160)}.80`;
     if (isDoorType(type)) return nextDoorIdFor(type);
     return typeMeta[type]?.text || "";
+  }
+
+  function toggleIntervalValue(obj) {
+    const raw = String(obj?.text || "").replace(",", ".");
+    const value = Math.abs(Number(raw));
+    return Number.isFinite(value) && value > 0 ? value : 1.5;
+  }
+
+  function toggleStartsInvisible(obj) {
+    if (!obj) return false;
+    if (obj.toggleStartHidden === true) return true;
+    const value = Number(String(obj.text || "").replace(",", "."));
+    return Number.isFinite(value) && value < 0;
+  }
+
+  function setTogglePlatformText(obj, interval = toggleIntervalValue(obj), startsInvisible = toggleStartsInvisible(obj)) {
+    const value = Number(interval);
+    const safe = Number.isFinite(value) && value > 0 ? round(value) : 1.5;
+    obj.toggleStartHidden = !!startsInvisible;
+    obj.text = `${obj.toggleStartHidden ? "-" : ""}${safe}`;
   }
 
   function makeObject(type, x, y, custom = {}) {
@@ -578,17 +642,23 @@
         const type = obj.type === "gravity" && String(obj.text || "").toLowerCase() === "all" ? "gravity-all" : (obj.type || "platform");
         const meta = typeMeta[type] || fallbackMeta;
         const rawName = obj.name || meta.name;
-        const nameMovement = !isMovingType(type) ? parseMovingSuffix(rawName, Number(obj.x) || 0) : null;
+        const x = Number.isFinite(Number(obj.x)) ? Number(obj.x) : 0;
+        const y = Number.isFinite(Number(obj.y)) ? Number(obj.y) : 0;
+        const nameMovement = !isMovingType(type) ? parseMovingSuffix(rawName, x, y) : null;
         const gameplayMoving = obj.gameplay?.moving || null;
+        const movingAxis = isMovingType(type)
+          ? "x"
+          : (String(obj.movingAxis || gameplayMoving?.axis || nameMovement?.axis || "").toLowerCase() === "y" ? "y" : "x");
         return {
           id: obj.id || `obj-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
           name: rawName,
           type,
-          x: Number.isFinite(Number(obj.x)) ? Number(obj.x) : 0,
-          y: Number.isFinite(Number(obj.y)) ? Number(obj.y) : 0,
+          x,
+          y,
           w: Math.max(1, Number.isFinite(Number(obj.w)) ? Number(obj.w) : meta.w),
           h: Math.max(1, Number.isFinite(Number(obj.h)) ? Number(obj.h) : meta.h),
           text: obj.text ?? "",
+          toggleStartHidden: obj.toggleStartHidden ?? obj.gameplay?.toggleStartsInvisible ?? obj.gameplay?.startsInvisible ?? false,
           hidden: !!obj.hidden,
           geometry: obj.geometry || (type === "spawn" || type === "coin" ? "ellipse" : "rect"),
           fill: obj.fill || meta.fill,
@@ -596,8 +666,9 @@
           strokeWidth: obj.strokeWidth || 1,
           locked: !!obj.locked,
           movingEnabled: canMoveType(type) && (isMovingType(type) || !!obj.movingEnabled || !!nameMovement || !!gameplayMoving),
-          movingMin: obj.movingMin ?? gameplayMoving?.minLeft ?? nameMovement?.min,
-          movingMax: obj.movingMax ?? gameplayMoving?.maxLeft ?? nameMovement?.max,
+          movingAxis,
+          movingMin: obj.movingMin ?? (movingAxis === "y" ? gameplayMoving?.minTop : gameplayMoving?.minLeft) ?? nameMovement?.min,
+          movingMax: obj.movingMax ?? (movingAxis === "y" ? gameplayMoving?.maxTop : gameplayMoving?.maxLeft) ?? nameMovement?.max,
           movingSpeed: obj.movingSpeed ?? gameplayMoving?.speed ?? nameMovement?.speed
         };
       })
@@ -645,7 +716,10 @@
       data.springForce = String(obj.text || "").trim() === "" ? 450 : Number(String(obj.text).replace(",", "."));
       data.springAxis = obj.type === "spring-h" ? "x" : "y";
     }
-    if (obj.type === "toggle-platform") data.toggleInterval = Number(String(obj.text || "0").replace(",", "."));
+    if (obj.type === "toggle-platform") {
+      data.toggleInterval = toggleIntervalValue(obj);
+      data.toggleStartsInvisible = toggleStartsInvisible(obj);
+    }
     if (obj.type === "ice") data.surface = "ice";
     if (obj.type === "water") data.medium = "water";
     if (obj.type === "p1-platform") data.playerCollision = "p1";
@@ -659,13 +733,19 @@
     if (hasMovement(obj)) {
       const moving = movingData(obj);
       data.moving = {
-        minLeft: moving.min,
-        maxLeft: moving.max,
+        axis: moving.axis,
         speed: moving.speed,
         ghost: obj.type === "moving-ghost",
         engineText: movementSpec(obj),
         nameSuffix: !isMovingType(obj.type)
       };
+      if (moving.axis === "y") {
+        data.moving.minTop = moving.min;
+        data.moving.maxTop = moving.max;
+      } else {
+        data.moving.minLeft = moving.min;
+        data.moving.maxLeft = moving.max;
+      }
     }
     if (isDoorType(obj.type)) {
       data.door = {
@@ -1057,7 +1137,8 @@
       obj.movingMin = Number.isFinite(data.min) ? data.min : obj.x;
       obj.movingMax = Number.isFinite(data.max) && data.max > obj.movingMin ? data.max : obj.movingMin + 160;
       obj.movingSpeed = Number.isFinite(data.speed) && data.speed !== 0 ? data.speed : 80;
-      obj.x = obj.movingMin;
+      obj.movingAxis = data.axis;
+      setMovementCoord(obj, obj.movingMin, data.axis);
     }
     syncObjectInternals(obj);
     ensurePositiveRect(obj);
@@ -1133,7 +1214,7 @@
         if (!Number.isFinite(data.speed) || data.speed === 0) warnings.push(`${displayName(obj)} com velocidade invalida`);
       }
       if (obj.type === "toggle-platform") {
-        const interval = Number(String(obj.text || "").replace(",", "."));
+        const interval = toggleIntervalValue(obj);
         if (!Number.isFinite(interval) || interval <= 0) warnings.push(`${displayName(obj)} sem intervalo valido`);
       }
       if ((obj.type === "spring" || obj.type === "spring-h") && String(obj.text || "").trim() !== "") {
@@ -1198,7 +1279,7 @@
     els.propY.value = round(obj.y);
     els.propW.value = round(obj.w);
     els.propH.value = round(obj.h);
-    els.propText.value = obj.text || "";
+    els.propText.value = obj.type === "toggle-platform" ? toggleIntervalValue(obj) : (obj.text || "");
     els.propFill.value = colorSafe(obj.fill);
     els.propStroke.value = colorSafe(obj.stroke, "#ffffff");
     els.propLocked.checked = !!obj.locked;
@@ -1211,11 +1292,18 @@
     const canMove = canMoveType(obj.type);
     const movingOn = hasMovement(obj);
     els.movingFields.classList.toggle("hidden", !canMove);
+    els.toggleFields.classList.toggle("hidden", obj.type !== "toggle-platform");
+    if (els.toggleInverted) els.toggleInverted.checked = toggleStartsInvisible(obj);
     textField.classList.toggle("compact-hidden", isMovingType(obj.type) || obj.type === "gravity-all");
     if (els.moveEnabled) {
       els.moveEnabled.checked = movingOn;
       els.moveEnabled.disabled = isMovingType(obj.type);
     }
+    if (els.moveAxis) {
+      els.moveAxis.value = movementAxis(obj);
+      els.moveAxis.disabled = !movingOn || isMovingType(obj.type);
+    }
+    if (els.moveAxisLabel) els.moveAxisLabel.classList.toggle("compact-hidden", isMovingType(obj.type));
     [els.moveMin, els.moveMax, els.moveSpeed].forEach((input) => {
       input.disabled = canMove && !movingOn;
     });
@@ -1227,7 +1315,7 @@
     els.computedNote.textContent = "";
 
     if (canMove) {
-      const data = movingData(obj) || parseMovingText("", obj.x);
+      const data = movingData(obj) || parseMovingText("", obj.x, obj.y, movementAxis(obj));
       els.moveMin.value = round(data.min);
       els.moveMax.value = round(data.max);
       els.moveSpeed.value = round(data.speed);
@@ -1256,6 +1344,9 @@
       els.propTextLabel.textContent = "Destino";
     } else if (obj.type === "toggle-platform") {
       els.propTextLabel.textContent = "Intervalo";
+      els.computedNote.textContent = toggleStartsInvisible(obj)
+        ? "Auto: texto interno negativo. Comeca sem colisao e aparece no primeiro ciclo."
+        : "Auto: comeca visivel e alterna pelo intervalo.";
     } else if (obj.type === "door-button" || obj.type === "door-button-inv") {
       els.propTextLabel.textContent = "ID da porta";
     } else {
@@ -1348,19 +1439,25 @@
   function drawMovementPath(g, obj) {
     const data = movingData(obj);
     if (!data) return null;
+    const axis = data.axis;
+    const x = obj.x + obj.w / 2;
     const y = obj.y + obj.h / 2;
+    const x1 = axis === "y" ? x : data.min;
+    const y1 = axis === "y" ? data.min : y;
+    const x2 = axis === "y" ? x : data.max + obj.w;
+    const y2 = axis === "y" ? data.max + obj.h : y;
     g.appendChild(svgEl("line", {
-      x1: data.min,
-      y1: y,
-      x2: data.max + obj.w,
-      y2: y,
+      x1,
+      y1,
+      x2,
+      y2,
       stroke: "rgba(65,162,255,.45)",
       "stroke-width": 1,
       "stroke-dasharray": "5 5",
       "vector-effect": "non-scaling-stroke"
     }));
-    g.appendChild(svgEl("circle", { cx: data.min, cy: y, r: 2.4, fill: "#41a2ff" }));
-    g.appendChild(svgEl("circle", { cx: data.max + obj.w, cy: y, r: 2.4, fill: "#41a2ff" }));
+    g.appendChild(svgEl("circle", { cx: x1, cy: y1, r: 2.4, fill: "#41a2ff" }));
+    g.appendChild(svgEl("circle", { cx: x2, cy: y2, r: 2.4, fill: "#41a2ff" }));
     return data;
   }
 
@@ -1677,21 +1774,26 @@
   function renderMovingConnector(obj) {
     if (!hasMovement(obj)) return;
     const data = movingData(obj);
-    const y = obj.y + obj.h / 2;
-    const startX = data.min;
-    const endX = data.max + obj.w;
+    const axis = data.axis;
+    const centerX = obj.x + obj.w / 2;
+    const centerY = obj.y + obj.h / 2;
+    const startX = axis === "y" ? centerX : data.min;
+    const startY = axis === "y" ? data.min : centerY;
+    const endX = axis === "y" ? centerX : data.max + obj.w;
+    const endY = axis === "y" ? data.max + obj.h : centerY;
     const midX = (startX + endX) / 2;
+    const midY = (startY + endY) / 2;
     els.overlayLayer.appendChild(svgEl("line", {
       class: "move-path",
       x1: startX,
-      y1: y,
+      y1: startY,
       x2: endX,
-      y2: y
+      y2: endY
     }));
     [
-      ["move-path-min", startX, y],
-      ["move-path-all", midX, y],
-      ["move-path-max", endX, y]
+      ["move-path-min", startX, startY],
+      ["move-path-all", midX, midY],
+      ["move-path-max", endX, endY]
     ].forEach(([mode, x, hy]) => {
       const handle = svgEl("circle", {
         class: `path-handle ${mode}`,
@@ -1947,9 +2049,10 @@
       obj.x = snapValue(original.x + (p.x - state.drag.start.x));
       obj.y = snapValue(original.y + (p.y - state.drag.start.y));
       if (hasMovement(obj)) {
-        const deltaX = obj.x - original.x;
-        obj.movingMin = round(Number(original.movingMin) + deltaX);
-        obj.movingMax = round(Number(original.movingMax) + deltaX);
+        const axis = movementAxis(obj);
+        const delta = axis === "y" ? obj.y - original.y : obj.x - original.x;
+        obj.movingMin = round(Number(original.movingMin) + delta);
+        obj.movingMax = round(Number(original.movingMax) + delta);
         setMovingText(obj);
       }
     }
@@ -1965,20 +2068,25 @@
 
   function resizeMovingPath(obj, p) {
     const original = state.drag.original;
-    const dx = snapValue(p.x) - snapValue(state.drag.start.x);
+    const axis = movementAxis(obj);
+    const pointerCoord = axis === "y" ? snapValue(p.y) : snapValue(p.x);
+    const dragStartCoord = axis === "y" ? snapValue(state.drag.start.y) : snapValue(state.drag.start.x);
+    const delta = pointerCoord - dragStartCoord;
     const startMin = Number(original.movingMin);
     const startMax = Number(original.movingMax);
     if (state.drag.mode === "move-path-min") {
-      obj.movingMin = Math.min(snapValue(p.x), startMax - 1);
-      obj.x = obj.movingMin;
+      obj.movingMin = Math.min(pointerCoord, startMax - 1);
+      setMovementCoord(obj, obj.movingMin, axis);
     } else if (state.drag.mode === "move-path-max") {
-      obj.movingMax = Math.max(snapValue(p.x) - obj.w, startMin + 1);
+      obj.movingMax = Math.max(pointerCoord - movementSize(obj, axis), startMin + 1);
     } else {
-      obj.movingMin = startMin + dx;
-      obj.movingMax = startMax + dx;
-      obj.x = original.x + dx;
+      obj.movingMin = startMin + delta;
+      obj.movingMax = startMax + delta;
+      obj.x = original.x + (axis === "x" ? delta : 0);
+      obj.y = original.y + (axis === "y" ? delta : 0);
     }
-    obj.y = original.y;
+    if (axis === "x") obj.y = original.y;
+    else obj.x = original.x;
     setMovingText(obj);
   }
 
@@ -2018,13 +2126,16 @@
     if (finishedDrag?.id) {
       const obj = objects().find((item) => item.id === finishedDrag.id);
       if (obj && hasMovement(obj)) {
+        const axis = movementAxis(obj);
         if (finishedDrag.mode === "draw") {
-          obj.movingMin = round(obj.x);
-          obj.movingMax = round(obj.x + 160);
+          const start = movementCoord(obj, axis);
+          obj.movingMin = round(start);
+          obj.movingMax = round(start + 160);
           obj.movingSpeed = Number.isFinite(Number(obj.movingSpeed)) ? obj.movingSpeed : 80;
-        } else if (finishedDrag.mode === "resize" && finishedDrag.original.x !== obj.x) {
-          obj.movingMin = round(obj.x);
-          if (Number(obj.movingMax) <= Number(obj.movingMin)) obj.movingMax = round(obj.x + 160);
+        } else if (finishedDrag.mode === "resize" && movementCoord(finishedDrag.original, axis) !== movementCoord(obj, axis)) {
+          const start = movementCoord(obj, axis);
+          obj.movingMin = round(start);
+          if (Number(obj.movingMax) <= Number(obj.movingMin)) obj.movingMax = round(start + 160);
         }
         syncObjectInternals(obj);
       }
@@ -2163,8 +2274,9 @@
       obj.x = round(obj.x + dx);
       obj.y = round(obj.y + dy);
       if (hasMovement(obj)) {
-        obj.movingMin = round(Number(obj.movingMin) + dx);
-        obj.movingMax = round(Number(obj.movingMax) + dx);
+        const delta = movementAxis(obj) === "y" ? dy : dx;
+        obj.movingMin = round(Number(obj.movingMin) + delta);
+        obj.movingMax = round(Number(obj.movingMax) + delta);
       }
       syncObjectInternals(obj);
     });
@@ -2220,14 +2332,39 @@
     if (!obj || !canMoveType(obj.type)) return;
     if (!isMovingType(obj.type)) obj.movingEnabled = true;
     obj[key] = Number(value);
-    if (!Number.isFinite(obj[key])) obj[key] = key === "movingSpeed" ? 80 : obj.x;
-    if (key === "movingMin") obj.x = obj[key];
+    if (!Number.isFinite(obj[key])) obj[key] = key === "movingSpeed" ? 80 : movementCoord(obj);
+    if (key === "movingMin") setMovementCoord(obj, obj[key]);
     if (Number(obj.movingMax) < Number(obj.movingMin)) {
       const oldMin = Number(obj.movingMin);
       obj.movingMin = Number(obj.movingMax);
       obj.movingMax = oldMin;
-      obj.x = obj.movingMin;
+      setMovementCoord(obj, obj.movingMin);
     }
+    syncObjectInternals(obj);
+    saveLocal();
+    render();
+  }
+
+  function setSelectedMovementAxis(axis) {
+    const obj = selectedObject();
+    if (!obj || !canMoveType(obj.type) || isMovingType(obj.type)) return;
+    pushHistory();
+    obj.movingEnabled = true;
+    obj.movingAxis = axis === "y" ? "y" : "x";
+    const start = movementCoord(obj, obj.movingAxis);
+    obj.movingMin = round(start);
+    obj.movingMax = round(start + 160);
+    obj.movingSpeed = Number.isFinite(Number(obj.movingSpeed)) && Number(obj.movingSpeed) !== 0 ? Number(obj.movingSpeed) : 80;
+    syncObjectInternals(obj);
+    saveLocal();
+    render();
+  }
+
+  function setSelectedToggleInverted(startsInvisible) {
+    const obj = selectedObject();
+    if (!obj || obj.type !== "toggle-platform") return;
+    pushHistory();
+    setTogglePlatformText(obj, toggleIntervalValue(obj), startsInvisible);
     syncObjectInternals(obj);
     saveLocal();
     render();
@@ -2288,7 +2425,7 @@
         const obj = selectedObject();
         if (!obj || !canMoveType(obj.type) || !hasMovement(obj)) return;
         obj[key] = Number(input.value);
-        if (key === "movingMin" && Number.isFinite(obj[key])) obj.x = obj[key];
+        if (key === "movingMin" && Number.isFinite(obj[key])) setMovementCoord(obj, obj[key]);
         syncObjectInternals(obj);
         renderObjects();
         renderOverlay();
@@ -2303,7 +2440,8 @@
         pushHistory();
         obj.movingEnabled = els.moveEnabled.checked;
         if (obj.movingEnabled) {
-          const data = movingData(obj) || parseMovingSuffix(obj.name, obj.x) || parseMovingText("", obj.x);
+          const data = movingData(obj) || parseMovingSuffix(obj.name, obj.x, obj.y) || parseMovingText("", obj.x, obj.y, movementAxis(obj));
+          obj.movingAxis = data.axis || movementAxis(obj);
           obj.movingMin = data.min;
           obj.movingMax = data.max <= data.min ? data.min + 160 : data.max;
           obj.movingSpeed = data.speed === 0 ? 80 : data.speed;
@@ -2316,6 +2454,12 @@
     bindMoving(els.moveMin, "movingMin");
     bindMoving(els.moveMax, "movingMax");
     bindMoving(els.moveSpeed, "movingSpeed");
+    if (els.moveAxis) {
+      els.moveAxis.addEventListener("change", () => setSelectedMovementAxis(els.moveAxis.value));
+    }
+    if (els.toggleInverted) {
+      els.toggleInverted.addEventListener("change", () => setSelectedToggleInverted(els.toggleInverted.checked));
+    }
     els.propLocked.addEventListener("change", () => {
       pushHistory();
       setSelectedProps({ locked: els.propLocked.checked });
