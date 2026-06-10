@@ -55,6 +55,7 @@
             <div class="tool-group-title">Interação</div>
             <button class="tool" data-tool="coin" title="Moeda: nome #%"><span class="tool-icon coin-icon"></span><span>Moeda</span></button>
             <button class="tool" data-tool="portal" title="Portal de saida: nome #Portal"><span class="tool-icon portal-icon"></span><span>Portal</span></button>
+            <button class="tool" data-tool="teleport" title="Teleporte pareado: nome #T com mesmo ID no texto"><span class="tool-icon teleport-icon"></span><span>Teleporte</span></button>
             <button class="tool" data-tool="spring" title="Mola vertical: nome #&, forca vazia significa 450"><span class="tool-icon spring-icon"></span><span>Mola</span></button>
             <button class="tool" data-tool="spring-h" title="Mola horizontal: nome #?, forca vazia significa 450"><span class="tool-icon spring-h-icon"></span><span>Mola horiz.</span></button>
             <button class="tool" data-tool="spawn" title="Spawn do jogador"><span class="tool-icon spawn-icon"></span><span>Spawn</span></button>
@@ -83,6 +84,10 @@
           <label class="switch-row">
             <span>Snap</span>
             <input id="snapToggle" type="checkbox" checked />
+          </label>
+          <label class="switch-row" title="Exporta uma configuracao de fase que reduz a gravidade para 33%">
+            <span>Fase espacial</span>
+            <input id="spatialToggle" type="checkbox" />
           </label>
           <label class="range-row">
             <span>Passo</span>
@@ -209,7 +214,7 @@
         <button data-action="lock">Travar / destravar</button>
         <button data-action="bring-front">Trazer pra frente</button>
         <button data-action="send-back">Enviar pro fundo</button>
-        <button data-action="pair-door">Criar par da porta</button>
+        <button data-action="pair-door">Criar par</button>
         <button data-action="delete" class="danger">Excluir</button>
       </div>
 

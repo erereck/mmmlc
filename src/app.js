@@ -2,7 +2,7 @@
   const SVG_NS = "http://www.w3.org/2000/svg";
   const SLIDE_W = 960;
   const SLIDE_H = 540;
-  const CREATOR_VERSION = "0.7.0";
+  const CREATOR_VERSION = "0.7.1";
   const STORAGE_KEY = "mmm-level-creator-v2";
   const LEGACY_STORAGE_KEY = "mmm-level-creator-v1";
 
@@ -10,7 +10,7 @@
   const removedDecorationTypes = new Set(["decor", "grass", "hub-door"]);
   const advancedVariantTypes = new Set(["moving-platform", "moving-ghost", "toggle-platform", "p2-platform", "gravity-all", "door-button-inv", "door-platform-inv"]);
   const movementCapableTypes = new Set([
-    "platform", "p1-platform", "p2-platform", "toggle-platform", "ice", "water", "death", "coin", "portal",
+    "platform", "p1-platform", "p2-platform", "toggle-platform", "ice", "water", "death", "coin", "portal", "teleport",
     "spring", "spring-h", "jump", "speed", "gravity", "gravity-all", "big-player", "mini-player",
     "door-button", "door-button-inv", "door-platform", "door-platform-inv"
   ]);
@@ -27,6 +27,7 @@
     death: { label: "Morte", name: "#@", fill: "#000000", stroke: "#ff0000", w: 80, h: 18 },
     coin: { label: "Moeda", name: "#%", fill: "#000000", stroke: "#feec00", w: 20.5, h: 20.5 },
     portal: { label: "Portal", name: "#Portal", fill: "#000000", stroke: "#00c8ff", w: 29.76, h: 29.76 },
+    teleport: { label: "Teleporte", name: "#T", fill: "#000000", stroke: "#a47cff", w: 29.76, h: 29.76, text: "1" },
     spring: { label: "Mola", name: "#&", fill: "#000000", stroke: "#feec00", w: 37.26, h: 6.56 },
     "spring-h": { label: "Mola horiz.", name: "#?", fill: "#000000", stroke: "#feec00", w: 6.56, h: 37.26 },
     spawn: { label: "Spawn", name: "Spawn", fill: "#000000", stroke: "#20b15a", w: 8.39, h: 8.39 },
@@ -81,6 +82,7 @@
     layerList: document.getElementById("layerList"),
     gridToggle: document.getElementById("gridToggle"),
     snapToggle: document.getElementById("snapToggle"),
+    spatialToggle: document.getElementById("spatialToggle"),
     gridSize: document.getElementById("gridSize"),
     gridSizeText: document.getElementById("gridSizeText"),
     propType: document.getElementById("propType"),
@@ -131,8 +133,27 @@
     return JSON.parse(JSON.stringify(value));
   }
 
+  function defaultSettings() {
+    return { spatial: false, gravityScale: 0.33 };
+  }
+
+  function sanitizeSettings(settings = {}) {
+    const clean = defaultSettings();
+    clean.spatial = !!settings.spatial;
+    const scale = Number(settings.gravityScale);
+    clean.gravityScale = Number.isFinite(scale) && scale > 0 ? round(scale) : clean.gravityScale;
+    return clean;
+  }
+
   function activeTab() {
     return state.tabs.find((tab) => tab.id === state.activeTabId);
+  }
+
+  function levelSettings() {
+    const tab = activeTab();
+    if (!tab.settings) tab.settings = defaultSettings();
+    tab.settings = sanitizeSettings(tab.settings);
+    return tab.settings;
   }
 
   function objects() {
@@ -403,6 +424,24 @@
     return "1";
   }
 
+  function teleportId(obj) {
+    const fromField = String(obj?.teleportId ?? "").trim();
+    if (fromField) return fromField;
+    const fromText = String(obj?.text ?? "").trim();
+    return fromText || "1";
+  }
+
+  function teleportIdSet(list = objects()) {
+    return new Set(list.filter((obj) => obj.type === "teleport").map(teleportId));
+  }
+
+  function nextTeleportIdFromUsed(usedIds) {
+    let id = 1;
+    while (usedIds.has(String(id))) id += 1;
+    usedIds.add(String(id));
+    return String(id);
+  }
+
   function doorIdSet(typeFilter) {
     const ids = new Set();
     for (const obj of objects()) {
@@ -434,7 +473,9 @@
 
   function cloneObjectsForInsert(sourceObjects, offsetX, offsetY) {
     const usedDoorIds = doorIdSet(isDoorType);
+    const usedTeleportIds = teleportIdSet();
     const doorMap = new Map();
+    const teleportMap = new Map();
     return sourceObjects.map((obj) => {
       const copy = clone(obj);
       copy.id = newObjectId();
@@ -445,6 +486,11 @@
         if (!doorMap.has(key)) doorMap.set(key, nextDoorIdFromUsed(usedDoorIds));
         copy.text = doorMap.get(key);
         copy.doorId = copy.text;
+      } else if (copy.type === "teleport") {
+        const key = teleportId(copy);
+        if (!teleportMap.has(key)) teleportMap.set(key, nextTeleportIdFromUsed(usedTeleportIds));
+        copy.text = teleportMap.get(key);
+        copy.teleportId = copy.text;
       }
       copy.name = autoName(copy.type);
       syncObjectInternals(copy);
@@ -485,6 +531,10 @@
       else if (obj.type === "door-button-inv") obj.name = "#_";
       else if (obj.type === "door-platform") obj.name = `-Porta${obj.doorId}`;
       else if (obj.type === "door-platform-inv") obj.name = `_Porta${obj.doorId}`;
+    } else if (obj.type === "teleport") {
+      obj.teleportId = teleportId(obj);
+      obj.name = "#T";
+      obj.text = obj.teleportId;
     } else if (obj.type === "spring") {
       obj.name = "#&";
     } else if (obj.type === "spring-h") {
@@ -509,6 +559,7 @@
     if (type === "p2-platform") return "#2";
     if (type === "toggle-platform") return "#-";
     if (type === "coin") return `#%${nextCountFor("coin")}`;
+    if (type === "teleport") return "#T";
     if (type === "door-platform") return `-Porta${nextDoorIdFor(type)}`;
     if (type === "door-platform-inv") return `_Porta${nextDoorIdFor(type)}`;
     return meta.name;
@@ -516,6 +567,7 @@
 
   function defaultTextFor(type, x = 0) {
     if (type === "portal") return "";
+    if (type === "teleport") return "1";
     if (type === "spring" || type === "spring-h") return "";
     if (type === "toggle-platform") return "1.5";
     if (isMovingType(type)) return `${round(x)}.${round(x + 160)}.80`;
@@ -593,6 +645,7 @@
         title: item.title,
         slide: item.slide,
         example: true,
+        settings: sanitizeSettings(item.settings),
         objects: sanitizeObjects(item.objects).map((obj) => ({ ...obj, locked: false }))
       }));
 
@@ -608,6 +661,7 @@
           title: tab.title || `Fase ${index + 1}`,
           slide: tab.slide || "",
           example: false,
+          settings: sanitizeSettings(tab.settings),
           objects: sanitizeObjects(tab.objects)
         }));
       loadedTabs = [...customTabs, ...examples];
@@ -622,10 +676,11 @@
       } catch {
         workObjects = defaultLevel();
       }
-      loadedTabs = [{ id: "work", title: "Sua fase", example: false, objects: workObjects }, ...examples];
+      loadedTabs = [{ id: "work", title: "Sua fase", example: false, settings: defaultSettings(), objects: workObjects }, ...examples];
     }
 
-    state.tabs = loadedTabs.length ? loadedTabs : [{ id: "work", title: "Sua fase", example: false, objects: defaultLevel() }, ...examples];
+    state.tabs = loadedTabs.length ? loadedTabs : [{ id: "work", title: "Sua fase", example: false, settings: defaultSettings(), objects: defaultLevel() }, ...examples];
+    state.tabs.forEach((tab) => { tab.settings = sanitizeSettings(tab.settings); });
     if (state.tabs.some((tab) => tab.id === activeId)) {
       state.activeTabId = activeId;
     } else {
@@ -644,23 +699,26 @@
     return (source || [])
       .filter((obj) => obj && !removedDecorationTypes.has(obj.type))
       .map((obj) => {
-        const type = obj.type === "gravity" && String(obj.text || "").toLowerCase() === "all" ? "gravity-all" : (obj.type || "platform");
+        const rawName = obj.name || "";
+        const inferredType = !obj.type && String(rawName).startsWith("#T") ? "teleport" : (obj.type || "platform");
+        const type = inferredType === "gravity" && String(obj.text || "").toLowerCase() === "all" ? "gravity-all" : inferredType;
         const meta = typeMeta[type] || fallbackMeta;
-        const rawName = obj.name || meta.name;
+        const safeName = rawName || meta.name;
         const x = Number.isFinite(Number(obj.x)) ? Number(obj.x) : 0;
         const y = Number.isFinite(Number(obj.y)) ? Number(obj.y) : 0;
-        const nameMovement = parseMovingSuffix(rawName, x, y);
+        const nameMovement = parseMovingSuffix(safeName, x, y);
         const gameplayMoving = obj.gameplay?.moving || null;
         const movingAxis = String(obj.movingAxis || gameplayMoving?.axis || nameMovement?.axis || "").toLowerCase() === "y" ? "y" : "x";
         return {
           id: obj.id || `obj-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
-          name: rawName,
+          name: safeName,
           type,
           x,
           y,
           w: Math.max(1, Number.isFinite(Number(obj.w)) ? Number(obj.w) : meta.w),
           h: Math.max(1, Number.isFinite(Number(obj.h)) ? Number(obj.h) : meta.h),
           text: obj.text ?? "",
+          teleportId: obj.teleportId ?? obj.gameplay?.teleport?.id ?? "",
           toggleStartHidden: obj.toggleStartHidden ?? obj.gameplay?.toggleStartsInvisible ?? obj.gameplay?.startsInvisible ?? false,
           hidden: !!obj.hidden,
           geometry: obj.geometry || (type === "spawn" || type === "coin" ? "ellipse" : "rect"),
@@ -687,6 +745,7 @@
         title: tab.title,
         slide: tab.slide || "",
         example: !!tab.example,
+        settings: sanitizeSettings(tab.settings),
         objects: sanitizeObjects(tab.objects)
       }))
     }));
@@ -715,6 +774,12 @@
     if (obj.type === "death") data.killsPlayer = true;
     if (obj.type === "coin") data.collectible = "coin";
     if (obj.type === "portal") data.portalDestination = obj.text || "";
+    if (obj.type === "teleport") {
+      data.teleport = {
+        id: teleportId(obj),
+        partnerIds: teleportPartnersIn(list, obj).map((partner) => partner.id)
+      };
+    }
     if (obj.type === "spring" || obj.type === "spring-h") {
       data.springForce = String(obj.text || "").trim() === "" ? 450 : Number(String(obj.text).replace(",", "."));
       data.springAxis = obj.type === "spring-h" ? "x" : "y";
@@ -825,6 +890,7 @@
         sourceSlide: tab.slide || null,
         example: !!tab.example
       },
+      settings: sanitizeSettings(tab.settings),
       warnings: collectWarnings(list),
       stats: list.reduce((acc, obj) => {
         acc[obj.type] = (acc[obj.type] || 0) + 1;
@@ -952,7 +1018,7 @@
     const tab = activeTab();
     const copy = clone(tab.objects).map((obj) => ({ ...obj, id: newObjectId() }));
     const title = tab.example ? `${tab.title} base` : `${tab.title} copia`;
-    createTab(title, copy);
+    createTab(title, copy, tab.settings);
     saveLocal();
   }
 
@@ -971,11 +1037,12 @@
     return `Fase ${n}`;
   }
 
-  function createTab(title = nextPhaseTitle(), sourceObjects = defaultLevel()) {
+  function createTab(title = nextPhaseTitle(), sourceObjects = defaultLevel(), sourceSettings = defaultSettings()) {
     const tab = {
       id: uniqueTabId(),
       title,
       example: false,
+      settings: sanitizeSettings(sourceSettings),
       objects: sanitizeObjects(sourceObjects).map((obj) => ({ ...obj, id: newObjectId(), locked: false }))
     };
     state.tabs.unshift(tab);
@@ -989,7 +1056,7 @@
       state.removedExampleIds.push(current.id);
     }
     if (state.tabs.length <= 1) {
-      state.tabs = [{ id: uniqueTabId(), title: "Fase 1", example: false, objects: defaultLevel() }];
+      state.tabs = [{ id: uniqueTabId(), title: "Fase 1", example: false, settings: defaultSettings(), objects: defaultLevel() }];
       state.activeTabId = state.tabs[0].id;
       clearSelection();
       saveLocal();
@@ -1198,12 +1265,33 @@
     return list.filter((other) => other.id !== obj.id && other.type === targetType && parseDoorId(other) === id);
   }
 
+  function teleportPartners(obj) {
+    return teleportPartnersIn(objects(), obj);
+  }
+
+  function teleportPartnersIn(list, obj) {
+    if (obj?.type !== "teleport") return [];
+    const id = teleportId(obj);
+    return list.filter((other) => other.id !== obj.id && other.type === "teleport" && teleportId(other) === id);
+  }
+
   function doorIssues(list = objects()) {
     const issues = [];
     for (const obj of list) {
       if (isDoorType(obj.type) && doorPartnersIn(list, obj).length === 0) {
         issues.push(`${displayName(obj)} sem par`);
       }
+    }
+    return issues;
+  }
+
+  function teleportIssues(list = objects()) {
+    const issues = [];
+    for (const obj of list) {
+      if (obj.type !== "teleport") continue;
+      const partners = teleportPartnersIn(list, obj);
+      if (partners.length === 0) issues.push(`${displayName(obj)} sem par`);
+      if (partners.length > 1) issues.push(`${displayName(obj)} com par duplicado`);
     }
     return issues;
   }
@@ -1236,6 +1324,7 @@
       }
     }
     warnings.push(...doorIssues(list));
+    warnings.push(...teleportIssues(list));
     return warnings;
   }
 
@@ -1244,7 +1333,10 @@
     for (const obj of objects()) {
       counts[obj.type] = (counts[obj.type] || 0) + 1;
     }
-    els.stats.innerHTML = Object.entries(counts)
+    const settingsRows = levelSettings().spatial
+      ? `<div class="stat special"><span>Espacial</span><b>33%</b></div>`
+      : "";
+    els.stats.innerHTML = settingsRows + Object.entries(counts)
       .sort((a, b) => typeLabel(a[0]).localeCompare(typeLabel(b[0]), "pt-BR"))
       .map(([key, value]) => `<div class="stat"><span>${typeLabel(key)}</span><b>${value}</b></div>`)
       .join("");
@@ -1325,7 +1417,7 @@
     els.quickEdit.classList.remove("hidden");
     els.variantBtn.disabled = !canCycleVariant(obj);
     els.variantBtn.textContent = variantButtonText(obj);
-    els.pairBtn.disabled = !isDoorType(obj.type);
+    els.pairBtn.disabled = !(isDoorType(obj.type) || obj.type === "teleport");
     els.normalizeBtn.disabled = false;
     els.computedNote.textContent = "";
 
@@ -1360,6 +1452,13 @@
       els.propTextLabel.textContent = "Forca (vazio = 450)";
     } else if (obj.type === "portal") {
       els.propTextLabel.textContent = "Destino";
+    } else if (obj.type === "teleport") {
+      els.propText.value = teleportId(obj);
+      els.propTextLabel.textContent = "ID do teleporte";
+      const partners = teleportPartners(obj);
+      els.computedNote.textContent = partners.length
+        ? `Auto: nome #T com texto ${teleportId(obj)}. Ligado com ${partners.map(displayName).join(", ")}.`
+        : "Crie um segundo teleporte com o mesmo ID para formar o par.";
     } else if (obj.type === "toggle-platform") {
       els.propTextLabel.textContent = "Intervalo";
       els.computedNote.textContent = toggleStartsInvisible(obj)
@@ -1392,6 +1491,7 @@
 
     if (obj.type === "coin") drawCoin(g, obj);
     else if (obj.type === "portal") drawPortal(g, obj);
+    else if (obj.type === "teleport") drawTeleport(g, obj);
     else if (obj.type === "spring" || obj.type === "spring-h") drawSpring(g, obj);
     else if (obj.type === "spawn") drawSpawn(g, obj);
     else if (obj.type === "death") drawDeath(g, obj);
@@ -1535,6 +1635,7 @@
     if (obj.type === "door-button-inv") return `Botao inv ${parseDoorId(obj)}`;
     if (obj.type === "door-platform") return `Porta ${parseDoorId(obj)}`;
     if (obj.type === "door-platform-inv") return `Porta inv ${parseDoorId(obj)}`;
+    if (obj.type === "teleport") return `Teleporte ${teleportId(obj)}`;
     if (["jump", "speed", "big-player", "mini-player", "door-button", "door-button-inv"].includes(obj.type) && obj.text) return `${obj.name} ${obj.text}`;
     return obj.name || typeLabel(obj.type);
   }
@@ -1686,6 +1787,41 @@
     }));
   }
 
+  function drawTeleport(g, obj) {
+    const cx = obj.x + obj.w / 2;
+    const cy = obj.y + obj.h / 2;
+    const outer = [
+      [cx, obj.y],
+      [obj.x + obj.w, cy],
+      [cx, obj.y + obj.h],
+      [obj.x, cy]
+    ].map((p) => p.join(",")).join(" ");
+    const insetX = obj.w * .22;
+    const insetY = obj.h * .22;
+    const inner = [
+      [cx, obj.y + insetY],
+      [obj.x + obj.w - insetX, cy],
+      [cx, obj.y + obj.h - insetY],
+      [obj.x + insetX, cy]
+    ].map((p) => p.join(",")).join(" ");
+    g.appendChild(svgEl("polygon", {
+      class: "shape-main",
+      points: outer,
+      fill: "#000000",
+      stroke: "#a47cff",
+      "stroke-width": 1.5,
+      "vector-effect": "non-scaling-stroke"
+    }));
+    g.appendChild(svgEl("polygon", {
+      points: inner,
+      fill: "none",
+      stroke: "rgba(164,124,255,.75)",
+      "stroke-width": 1,
+      "vector-effect": "non-scaling-stroke"
+    }));
+    g.appendChild(svgEl("circle", { cx, cy, r: Math.max(2, Math.min(obj.w, obj.h) * .12), fill: "#a47cff" }));
+  }
+
   function drawSpring(g, obj) {
     g.appendChild(svgEl("rect", commonRectAttrs(obj, { fill: "#000000", stroke: "#feec00" })));
     if (obj.type === "spring-h") {
@@ -1744,6 +1880,7 @@
       return;
     }
     renderDoorConnector(obj);
+    renderTeleportConnector(obj);
     renderMovingConnector(obj);
     const pad = 0;
     els.overlayLayer.appendChild(svgEl("rect", {
@@ -1872,6 +2009,34 @@
     }
   }
 
+  function renderTeleportConnector(obj) {
+    if (obj.type !== "teleport") return;
+    const start = objectCenter(obj);
+    const partners = teleportPartners(obj);
+    if (partners.length) {
+      for (const partner of partners) {
+        const end = objectCenter(partner);
+        const midY = (start.y + end.y) / 2;
+        els.overlayLayer.appendChild(svgEl("path", {
+          class: "teleport-link",
+          d: `M ${start.x} ${start.y} C ${start.x} ${midY}, ${end.x} ${midY}, ${end.x} ${end.y}`
+        }));
+      }
+    } else {
+      els.overlayLayer.appendChild(svgEl("circle", {
+        class: "teleport-link missing",
+        cx: start.x,
+        cy: start.y,
+        r: Math.max(16, Math.min(obj.w, obj.h) + 12)
+      }));
+      els.overlayLayer.appendChild(svgEl("text", {
+        class: "door-warning",
+        x: obj.x + obj.w + 8,
+        y: obj.y - 6
+      }, [document.createTextNode("!")]));
+    }
+  }
+
   function renderObjects() {
     els.objectLayer.innerHTML = "";
     for (const obj of objects()) {
@@ -1890,6 +2055,7 @@
     els.gridLayer.style.display = state.grid ? "" : "none";
     els.gridToggle.checked = state.grid;
     els.snapToggle.checked = state.snap;
+    if (els.spatialToggle) els.spatialToggle.checked = !!levelSettings().spatial;
     els.gridSize.value = state.gridSize;
     els.gridSizeText.textContent = state.gridSize;
     document.querySelector(".app-shell").classList.toggle("tabs-collapsed", state.tabsCollapsed);
@@ -1997,7 +2163,7 @@
     const p = pointFromEvent(e);
     const type = state.tool;
     const meta = typeMeta[type] || fallbackMeta;
-    const fixed = ["coin", "portal", "spring", "spring-h", "spawn", "jump", "speed", "gravity", "gravity-all", "big-player", "mini-player", "door-button", "door-button-inv"].includes(type);
+    const fixed = ["coin", "portal", "teleport", "spring", "spring-h", "spawn", "jump", "speed", "gravity", "gravity-all", "big-player", "mini-player", "door-button", "door-button-inv"].includes(type);
     pushHistory();
     let obj;
     if (fixed) {
@@ -2304,6 +2470,27 @@
     render();
   }
 
+  function createTeleportPair() {
+    const obj = selectedObject();
+    if (!obj || obj.type !== "teleport") return;
+    const id = teleportId(obj);
+    const x = obj.x + 96;
+    const y = obj.y;
+    pushHistory();
+    const partner = makeObject("teleport", clamp(x, 0, SLIDE_W - obj.w), clamp(y, 0, SLIDE_H - obj.h), { text: id, teleportId: id });
+    objects().push(partner);
+    setSelection([partner.id], partner.id);
+    saveLocal();
+    render();
+  }
+
+  function createPairForSelected() {
+    const obj = selectedObject();
+    if (!obj) return;
+    if (isDoorType(obj.type)) createDoorPair();
+    else if (obj.type === "teleport") createTeleportPair();
+  }
+
   function nudgeSelected(dx, dy) {
     const selection = selectedObjects().filter((obj) => !obj.locked);
     if (!selection.length) return;
@@ -2334,7 +2521,8 @@
     menu.style.top = `${Math.min(e.clientY, window.innerHeight - 250)}px`;
     menu.querySelector('[data-action="paste"]').disabled = !state.clipboard;
     menu.querySelector('[data-action="variant"]').disabled = state.selectedIds.length !== 1 || !canCycleVariant(selectedObject());
-    menu.querySelector('[data-action="pair-door"]').disabled = state.selectedIds.length !== 1 || !isDoorType(selectedObject()?.type);
+    const pairObj = selectedObject();
+    menu.querySelector('[data-action="pair-door"]').disabled = state.selectedIds.length !== 1 || !(isDoorType(pairObj?.type) || pairObj?.type === "teleport");
   }
 
   function hideContextMenu() {
@@ -2350,7 +2538,7 @@
     else if (action === "lock") toggleSelectedLock();
     else if (action === "bring-front") bringSelectedFront();
     else if (action === "send-back") sendSelectedBack();
-    else if (action === "pair-door") createDoorPair();
+    else if (action === "pair-door") createPairForSelected();
     else if (action === "delete") deleteSelected();
   }
 
@@ -2359,6 +2547,7 @@
     if (!obj) return;
     Object.assign(obj, patch);
     if (isDoorType(obj.type) && Object.prototype.hasOwnProperty.call(patch, "text")) obj.doorId = patch.text;
+    if (obj.type === "teleport" && Object.prototype.hasOwnProperty.call(patch, "text")) obj.teleportId = patch.text;
     syncObjectInternals(obj);
     ensurePositiveRect(obj);
     saveLocal();
@@ -2456,6 +2645,7 @@
         if (!obj) return;
         obj[key] = parse(input.value);
         if (isDoorType(obj.type) && key === "text") obj.doorId = obj.text;
+        if (obj.type === "teleport" && key === "text") obj.teleportId = obj.text;
         syncObjectInternals(obj);
         ensurePositiveRect(obj);
         renderObjects();
@@ -2546,7 +2736,7 @@
     els.copyExportBtn.addEventListener("click", copyExportText);
     els.downloadExportBtn.addEventListener("click", downloadLastExport);
     els.variantBtn.addEventListener("click", cycleSelectedVariant);
-    els.pairBtn.addEventListener("click", createDoorPair);
+    els.pairBtn.addEventListener("click", createPairForSelected);
     els.normalizeBtn.addEventListener("click", normalizeSelectedObject);
     document.getElementById("newLevelBtn").addEventListener("click", newLevel);
     document.getElementById("useExampleBtn").addEventListener("click", useExampleAsBase);
@@ -2573,6 +2763,14 @@
       state.snap = els.snapToggle.checked;
       render();
     });
+    if (els.spatialToggle) {
+      els.spatialToggle.addEventListener("change", () => {
+        levelSettings().spatial = els.spatialToggle.checked;
+        saveLocal();
+        renderStats();
+        showToast(els.spatialToggle.checked ? "Fase espacial ativada" : "Fase espacial desativada");
+      });
+    }
     els.gridSize.addEventListener("input", () => {
       state.gridSize = Number(els.gridSize.value);
       render();

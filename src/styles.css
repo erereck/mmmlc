@@ -533,6 +533,18 @@ h2 {
   transform: rotate(45deg) scale(.75);
 }
 
+.teleport-icon {
+  border: 2px solid #a47cff;
+  transform: rotate(45deg) scale(.75);
+}
+
+.teleport-icon::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border: 1px solid #a47cff;
+}
+
 .spring-icon {
   border-bottom: 3px solid var(--yellow);
 }
@@ -748,6 +760,11 @@ input[type="range"] {
   font-family: var(--mono);
 }
 
+.stat.special {
+  border-color: #a47cff;
+  color: #d7c8ff;
+}
+
 .warnings {
   display: flex;
   flex-direction: column;
@@ -872,6 +889,20 @@ input[type="range"] {
 }
 
 .door-link.missing {
+  stroke: #ff3030;
+  stroke-dasharray: 2 5;
+}
+
+.teleport-link {
+  fill: none;
+  stroke: #a47cff;
+  stroke-width: 1.35;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 4 4;
+  pointer-events: none;
+}
+
+.teleport-link.missing {
   stroke: #ff3030;
   stroke-dasharray: 2 5;
 }
