@@ -81,69 +81,186 @@ button {
   grid-template-columns: 360px minmax(420px, 1fr) 0;
 }
 
-/* ── Topbar ───────────────────────────────────────────────── */
+/* ── Topbar — 3 zonas fixas, altura compacta ──────────────── */
+/*
+   [brand]  |  [stage-tools]  |  [file-actions]
+   Botões de gestão de fase (Nova/Duplicar) foram para
+   o painel esquerdo, perto das abas de fase onde fazem sentido.
+   Inspetor virou toggle no stage-toolbar.
+   Exportar JSON/Tudo colapsados em .cmd-dropdown.
+*/
 .topbar {
   grid-column: 1 / -1;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 20px;
+  gap: 0;
   border-bottom: 1px solid #ffffff;
   background: var(--bg);
-  padding: 0 18px;
-  min-height: 56px;
+  min-height: 44px;
 }
 
+/* Zona 1: brand */
 .brand {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
+  padding: 0 16px 0 14px;
+  border-right: 1px solid var(--line);
+  height: 100%;
   min-width: 0;
-  flex: 0 1 260px;
 }
 
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 28px;
+  width: 32px;
+  height: 24px;
   border: 2px solid var(--accent);
   color: var(--bg);
   background: var(--accent);
-  font: 900 11px/1 var(--mono);
+  font: 900 10px/1 var(--mono);
   letter-spacing: -0.02em;
+  flex: 0 0 auto;
 }
 
 .brand h1 {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.1;
   font-weight: 900;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text);
+  white-space: nowrap;
 }
 
 .brand p {
-  margin: 4px 0 0;
+  margin: 3px 0 0;
   color: var(--muted);
-  font: 10px/1 var(--mono);
+  font: 9px/1 var(--mono);
   letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
 }
 
-.top-actions,
-.quick-actions {
+/* Zona 2: stage-tools (centro, alinhado à esquerda) */
+.top-actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  padding: 0 12px;
+  height: 100%;
   min-width: 0;
 }
 
-.top-actions {
-  flex: 1 1 520px;
+/* Separador visual entre grupos de ações */
+.top-actions .cmd-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--line);
+  flex: 0 0 auto;
+  margin: 0 4px;
+}
+
+/* Zona 3: file-actions (direita) */
+.quick-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 0 14px 0 12px;
+  border-left: 1px solid var(--line);
+  height: 100%;
+}
+
+/* ── Dropdown de exportação ───────────────────────────────── */
+/*
+   .cmd-dropdown: wrapper position:relative
+   .cmd-dropdown > button.cmd: o botão visível
+   .cmd-dropdown-menu: lista que aparece ao :focus-within
+   Use tabindex="-1" nos itens do menu para manter focus
+*/
+.cmd-dropdown {
+  position: relative;
+}
+
+.cmd-dropdown-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 0;
+  z-index: 20;
+  min-width: 180px;
+  border: 1px solid #ffffff;
+  background: #050505;
+  box-shadow: 0 10px 36px rgba(0,0,0,.8);
+  padding: 4px;
+}
+
+.cmd-dropdown:focus-within .cmd-dropdown-menu,
+.cmd-dropdown.open .cmd-dropdown-menu {
+  display: block;
+}
+
+.cmd-dropdown-menu button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 16px;
+  width: 100%;
+  min-height: 30px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 0 10px;
+  text-align: left;
+  font: 11px/1 var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition: background 60ms;
+  cursor: pointer;
+}
+
+.cmd-dropdown-menu button:hover {
+  background: rgba(255,255,255,.08);
+  color: var(--accent);
+}
+
+.cmd-dropdown-menu button span {
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.cmd-dropdown-menu .menu-sep {
+  height: 1px;
+  background: var(--line);
+  margin: 3px 0;
+}
+
+/* Seta indicadora no botão do dropdown */
+.cmd.has-arrow::after {
+  content: "▾";
+  margin-left: 6px;
+  font-size: 10px;
+  opacity: .7;
+}
+
+/* ── Botões de fase no painel esquerdo ────────────────────── */
+/*
+   .fase-actions: faixa de botões no topo do painel de fases.
+   Fica dentro da section .tabs-section, antes do .tab-list.
+   Substitui os botões "Nova Fase" e "Duplicar Fase" da topbar.
+*/
+.fase-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-bottom: 8px;
 }
 
 /* ── Section headers ──────────────────────────────────────── */
@@ -616,6 +733,20 @@ h2 {
 .spawn-icon {
   border: 2px solid var(--green);
   border-radius: 50%;
+}
+
+.spawn-p2-icon {
+  border: 2px solid #41a2ff;
+  border-radius: 50%;
+}
+
+.spawn-p2-icon::after {
+  content: "2";
+  position: absolute;
+  right: -4px;
+  top: -6px;
+  color: #41a2ff;
+  font: 700 10px/1 monospace;
 }
 
 .water-icon {
@@ -1385,12 +1516,14 @@ input[type="range"] {
     grid-template-columns: 300px minmax(340px, 1fr) 0;
   }
 
-  .top-actions {
-    gap: 5px;
+  /* Esconde texto da brand, mantém o mark */
+  .brand p {
+    display: none;
   }
 
   .cmd {
     padding: 0 9px;
+    font-size: 11px;
   }
 }
 
@@ -1407,31 +1540,41 @@ input[type="range"] {
     min-height: 100vh;
   }
 
+  .topbar {
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    min-height: auto;
+    padding-bottom: 8px;
+  }
+
+  .brand {
+    grid-column: 1;
+    grid-row: 1;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 8px 14px;
+  }
+
+  .top-actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding: 6px 10px;
+    flex-wrap: wrap;
+    border: 0;
+  }
+
+  .quick-actions {
+    grid-column: 2;
+    grid-row: 1;
+    border-left: 1px solid var(--line);
+    padding: 0 10px;
+  }
+
   .topbar,
   .left-panel,
   .right-panel,
   .stage-column {
     grid-column: 1;
-  }
-
-  .topbar {
-    align-items: flex-start;
-    gap: 10px;
-    padding: 10px;
-  }
-
-  .brand {
-    flex-basis: 100%;
-  }
-
-  .top-actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    width: 100%;
-  }
-
-  .top-actions .cmd {
-    width: 100%;
   }
 
   .stage-column { order: 2; }
@@ -1456,5 +1599,12 @@ input[type="range"] {
     bottom: 10px;
     width: auto;
     grid-template-rows: auto minmax(220px, 48vh) auto;
+  }
+
+  /* Dropdown abre pra cima em mobile */
+  .cmd-dropdown-menu {
+    top: auto;
+    bottom: calc(100% + 2px);
+    right: 0;
   }
 }

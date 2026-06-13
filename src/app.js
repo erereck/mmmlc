@@ -31,6 +31,7 @@
     spring: { label: "Mola", name: "#&", fill: "#000000", stroke: "#feec00", w: 37.26, h: 6.56 },
     "spring-h": { label: "Mola horiz.", name: "#?", fill: "#000000", stroke: "#feec00", w: 6.56, h: 37.26 },
     spawn: { label: "Spawn", name: "Spawn", fill: "#000000", stroke: "#20b15a", w: 8.39, h: 8.39 },
+    "spawn-p2": { label: "Spawn P2", name: "SpawnP2", fill: "#000000", stroke: "#41a2ff", w: 8.39, h: 8.39 },
     jump: { label: "Pulo+", name: "#^", fill: "#000000", stroke: "#feec00", w: 24, h: 24, text: "P" },
     speed: { label: "Vel+", name: "#^", fill: "#000000", stroke: "#297bff", w: 24, h: 24, text: "V" },
     gravity: { label: "Gravidade", name: "#!", fill: "#000000", stroke: "transparent", w: 29.046, h: 29.046 },
@@ -535,6 +536,12 @@
       obj.teleportId = teleportId(obj);
       obj.name = "#T";
       obj.text = obj.teleportId;
+    } else if (obj.type === "spawn") {
+      obj.name = "Spawn";
+      obj.text = "";
+    } else if (obj.type === "spawn-p2") {
+      obj.name = "SpawnP2";
+      obj.text = "";
     } else if (obj.type === "spring") {
       obj.name = "#&";
     } else if (obj.type === "spring-h") {
@@ -607,7 +614,7 @@
       h: meta.h,
       text: custom.text !== undefined ? custom.text : defaultTextFor(type, x),
       hidden: false,
-      geometry: type === "spawn" || type === "coin" ? "ellipse" : "rect",
+      geometry: type === "spawn" || type === "spawn-p2" || type === "coin" ? "ellipse" : "rect",
       fill: meta.fill,
       stroke: meta.stroke,
       strokeWidth: 1,
@@ -700,7 +707,11 @@
       .filter((obj) => obj && !removedDecorationTypes.has(obj.type))
       .map((obj) => {
         const rawName = obj.name || "";
-        const inferredType = !obj.type && String(rawName).startsWith("#T") ? "teleport" : (obj.type || "platform");
+        const inferredType = !obj.type && String(rawName) === "Spawn"
+          ? "spawn"
+          : (!obj.type && String(rawName) === "SpawnP2"
+            ? "spawn-p2"
+            : (!obj.type && String(rawName).startsWith("#T") ? "teleport" : (obj.type || "platform")));
         const type = inferredType === "gravity" && String(obj.text || "").toLowerCase() === "all" ? "gravity-all" : inferredType;
         const meta = typeMeta[type] || fallbackMeta;
         const safeName = rawName || meta.name;
@@ -721,7 +732,7 @@
           teleportId: obj.teleportId ?? obj.gameplay?.teleport?.id ?? "",
           toggleStartHidden: obj.toggleStartHidden ?? obj.gameplay?.toggleStartsInvisible ?? obj.gameplay?.startsInvisible ?? false,
           hidden: !!obj.hidden,
-          geometry: obj.geometry || (type === "spawn" || type === "coin" ? "ellipse" : "rect"),
+          geometry: obj.geometry || (type === "spawn" || type === "spawn-p2" || type === "coin" ? "ellipse" : "rect"),
           fill: obj.fill || meta.fill,
           stroke: obj.stroke || meta.stroke,
           strokeWidth: obj.strokeWidth || 1,
@@ -773,6 +784,8 @@
     const data = {};
     if (obj.type === "death") data.killsPlayer = true;
     if (obj.type === "coin") data.collectible = "coin";
+    if (obj.type === "spawn") data.spawn = "p1";
+    if (obj.type === "spawn-p2") data.spawn = "p2";
     if (obj.type === "portal") data.portalDestination = obj.text || "";
     if (obj.type === "teleport") {
       data.teleport = {
@@ -1493,7 +1506,7 @@
     else if (obj.type === "portal") drawPortal(g, obj);
     else if (obj.type === "teleport") drawTeleport(g, obj);
     else if (obj.type === "spring" || obj.type === "spring-h") drawSpring(g, obj);
-    else if (obj.type === "spawn") drawSpawn(g, obj);
+    else if (obj.type === "spawn" || obj.type === "spawn-p2") drawSpawn(g, obj);
     else if (obj.type === "death") drawDeath(g, obj);
     else if (obj.type === "water") drawWater(g, obj);
     else if (obj.type === "platform" && hasMovement(obj)) drawMovingBasePlatform(g, obj);
@@ -1854,6 +1867,7 @@
   function drawSpawn(g, obj) {
     const cx = obj.x + obj.w / 2;
     const cy = obj.y + obj.h / 2;
+    const color = obj.type === "spawn-p2" ? "#41a2ff" : "#20b15a";
     g.appendChild(svgEl("ellipse", {
       class: "shape-main",
       cx,
@@ -1861,12 +1875,24 @@
       rx: obj.w / 2,
       ry: obj.h / 2,
       fill: "#000000",
-      stroke: "#20b15a",
+      stroke: color,
       "stroke-width": 1.5,
       "vector-effect": "non-scaling-stroke"
     }));
-    g.appendChild(svgEl("line", { x1: cx, y1: cy - 7, x2: cx, y2: cy + 7, stroke: "#20b15a", "stroke-width": 1, "vector-effect": "non-scaling-stroke" }));
-    g.appendChild(svgEl("line", { x1: cx - 7, y1: cy, x2: cx + 7, y2: cy, stroke: "#20b15a", "stroke-width": 1, "vector-effect": "non-scaling-stroke" }));
+    g.appendChild(svgEl("line", { x1: cx, y1: cy - 7, x2: cx, y2: cy + 7, stroke: color, "stroke-width": 1, "vector-effect": "non-scaling-stroke" }));
+    g.appendChild(svgEl("line", { x1: cx - 7, y1: cy, x2: cx + 7, y2: cy, stroke: color, "stroke-width": 1, "vector-effect": "non-scaling-stroke" }));
+    if (obj.type === "spawn-p2") {
+      const label = svgEl("text", {
+        x: cx + 7,
+        y: cy - 6,
+        fill: color,
+        "font-size": 9,
+        "font-family": "monospace",
+        "dominant-baseline": "middle"
+      });
+      label.textContent = "2";
+      g.appendChild(label);
+    }
   }
 
   function renderOverlay() {
@@ -2163,7 +2189,7 @@
     const p = pointFromEvent(e);
     const type = state.tool;
     const meta = typeMeta[type] || fallbackMeta;
-    const fixed = ["coin", "portal", "teleport", "spring", "spring-h", "spawn", "jump", "speed", "gravity", "gravity-all", "big-player", "mini-player", "door-button", "door-button-inv"].includes(type);
+    const fixed = ["coin", "portal", "teleport", "spring", "spring-h", "spawn", "spawn-p2", "jump", "speed", "gravity", "gravity-all", "big-player", "mini-player", "door-button", "door-button-inv"].includes(type);
     pushHistory();
     let obj;
     if (fixed) {
