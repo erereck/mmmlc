@@ -756,7 +756,7 @@
           movingMin: obj.movingMin ?? (movingAxis === "y" ? gameplayMoving?.minTop : gameplayMoving?.minLeft) ?? nameMovement?.min,
           movingMax: obj.movingMax ?? (movingAxis === "y" ? gameplayMoving?.maxTop : gameplayMoving?.maxLeft) ?? nameMovement?.max,
           movingSpeed: obj.movingSpeed ?? gameplayMoving?.speed ?? nameMovement?.speed,
-          movingReverse: obj.movingReverse ?? gameplayMoving?.reverse ?? nameMovement?.reverse ?? false
+          movingReverse: obj.movingReverse ?? gameplayMoving?.reverse ?? nameMovement?.reverse
         };
       })
       .map((obj) => syncObjectInternals(obj));
