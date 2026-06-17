@@ -5,6 +5,7 @@
   const CREATOR_VERSION = "0.7.1";
   const STORAGE_KEY = "mmm-level-creator-v2";
   const LEGACY_STORAGE_KEY = "mmm-level-creator-v1";
+  const MOVING_REVERSE_MARK = "~";
 
   const fallbackMeta = { label: "Objeto", name: "Objeto", fill: "#000000", stroke: "#ffffff", w: 80, h: 12 };
   const removedDecorationTypes = new Set(["decor", "grass", "hub-door"]);
@@ -101,6 +102,7 @@
     moveMin: document.getElementById("moveMin"),
     moveMax: document.getElementById("moveMax"),
     moveSpeed: document.getElementById("moveSpeed"),
+    moveReverse: document.getElementById("moveReverse"),
     toggleFields: document.getElementById("toggleFields"),
     toggleEnabled: document.getElementById("toggleEnabled"),
     toggleInverted: document.getElementById("toggleInverted"),
@@ -303,6 +305,11 @@
   function parseMovingText(text, x = 0, y = 0, fallbackAxis = "x") {
     let raw = String(text || "").trim();
     let axis = fallbackAxis === "y" ? "y" : "x";
+    let reverse = false;
+    if (raw.startsWith(MOVING_REVERSE_MARK)) {
+      reverse = true;
+      raw = raw.slice(MOVING_REVERSE_MARK.length).trim();
+    }
     const prefix = raw.slice(0, 2).toUpperCase();
     if (prefix === "Y:") {
       axis = "y";
@@ -318,6 +325,7 @@
     const start = Number.isFinite(min) ? min : round(axis === "y" ? y : x);
     return {
       axis,
+      reverse,
       min: start,
       max: Number.isFinite(max) ? max : round(start + 160),
       speed: Number.isFinite(speed) ? speed : 80
@@ -328,13 +336,16 @@
     const raw = String(name || "");
     const index = raw.indexOf("'");
     if (index < 0 || index >= raw.length - 1) return null;
-    return parseMovingText(raw.slice(index + 1), x, y);
+    let spec = raw.slice(index + 1);
+    if (spec.startsWith("'")) spec = spec.slice(1);
+    return parseMovingText(spec, x, y);
   }
 
   function movementSpec(obj) {
     const data = movingData(obj) || parseMovingText("", obj?.x || 0, obj?.y || 0, movementAxis(obj));
     const prefix = data.axis === "y" ? "Y:" : "";
-    return `${prefix}${round(data.min)}.${round(data.max)}.${round(data.speed)}`;
+    const reverse = data.reverse ? MOVING_REVERSE_MARK : "";
+    return `${reverse}${prefix}${round(data.min)}.${round(data.max)}.${round(data.speed)}`;
   }
 
   function setMovingText(obj) {
@@ -343,6 +354,7 @@
     obj.movingMax = round(Number.isFinite(Number(obj.movingMax)) ? Number(obj.movingMax) : data.max);
     obj.movingSpeed = round(Number.isFinite(Number(obj.movingSpeed)) ? Number(obj.movingSpeed) : data.speed);
     obj.movingAxis = data.axis === "y" ? "y" : "x";
+    obj.movingReverse = !!(obj.movingReverse ?? data.reverse);
     if (isMovingType(obj.type)) {
       obj.text = movementSpec(obj);
     } else if (obj.movingEnabled) {
@@ -360,6 +372,7 @@
     const axis = obj.movingAxis === "y" || parsed.axis === "y" ? "y" : "x";
     return {
       axis,
+      reverse: !!(obj.movingReverse ?? parsed.reverse),
       min: Number.isFinite(Number(obj.movingMin)) ? Number(obj.movingMin) : parsed.min,
       max: Number.isFinite(Number(obj.movingMax)) ? Number(obj.movingMax) : parsed.max,
       speed: Number.isFinite(Number(obj.movingSpeed)) ? Number(obj.movingSpeed) : parsed.speed
@@ -378,6 +391,7 @@
     obj.movingMin = round(Number.isFinite(Number(parsed.min)) ? Number(parsed.min) : startCoord);
     obj.movingMax = round(Number.isFinite(Number(parsed.max)) && Number(parsed.max) > obj.movingMin ? Number(parsed.max) : obj.movingMin + 160);
     obj.movingSpeed = round(Number.isFinite(Number(parsed.speed)) && Number(parsed.speed) !== 0 ? Number(parsed.speed) : 80);
+    obj.movingReverse = !!(obj.movingReverse ?? parsed.reverse);
 
     if (isMovingType(obj.type)) {
       setMovementCoord(obj, obj.movingMin, obj.movingAxis);
@@ -741,7 +755,8 @@
           movingAxis,
           movingMin: obj.movingMin ?? (movingAxis === "y" ? gameplayMoving?.minTop : gameplayMoving?.minLeft) ?? nameMovement?.min,
           movingMax: obj.movingMax ?? (movingAxis === "y" ? gameplayMoving?.maxTop : gameplayMoving?.maxLeft) ?? nameMovement?.max,
-          movingSpeed: obj.movingSpeed ?? gameplayMoving?.speed ?? nameMovement?.speed
+          movingSpeed: obj.movingSpeed ?? gameplayMoving?.speed ?? nameMovement?.speed,
+          movingReverse: obj.movingReverse ?? gameplayMoving?.reverse ?? nameMovement?.reverse ?? false
         };
       })
       .map((obj) => syncObjectInternals(obj));
@@ -816,6 +831,7 @@
       data.moving = {
         axis: moving.axis,
         speed: moving.speed,
+        reverse: !!moving.reverse,
         ghost: obj.type === "moving-ghost",
         engineText: movementSpec(obj),
         nameSuffix: !isMovingType(obj.type)
@@ -1423,6 +1439,10 @@
       els.moveAxis.value = movementAxis(obj);
       els.moveAxis.disabled = !movingOn;
     }
+    if (els.moveReverse) {
+      els.moveReverse.checked = !!obj.movingReverse;
+      els.moveReverse.disabled = !movingOn;
+    }
     if (els.moveAxisLabel) els.moveAxisLabel.classList.toggle("compact-hidden", false);
     [els.moveMin, els.moveMax, els.moveSpeed].forEach((input) => {
       input.disabled = canMove && !movingOn;
@@ -1439,6 +1459,7 @@
       els.moveMin.value = round(data.min);
       els.moveMax.value = round(data.max);
       els.moveSpeed.value = round(data.speed);
+      if (els.moveReverse) els.moveReverse.checked = !!data.reverse;
     }
 
     if (isMovingType(obj.type)) {
@@ -1484,7 +1505,9 @@
     }
 
     if (canMove && movingOn) {
-      const note = `Movel: nome ${obj.name}. O texto do objeto continua ${obj.text || "vazio"}.`;
+      const data = movingData(obj);
+      const reverseNote = data?.reverse ? " Comeca pelo fim." : "";
+      const note = `Movel: nome ${obj.name}. O texto do objeto continua ${obj.text || "vazio"}.${reverseNote}`;
       els.computedNote.textContent = els.computedNote.textContent ? `${els.computedNote.textContent} ${note}` : note;
     }
 
@@ -2613,6 +2636,17 @@
     render();
   }
 
+  function setSelectedMovementReverse(reverse) {
+    const obj = selectedObject();
+    if (!obj || !canMoveType(obj.type)) return;
+    pushHistory();
+    if (!isMovingType(obj.type)) obj.movingEnabled = true;
+    obj.movingReverse = !!reverse;
+    syncObjectInternals(obj);
+    saveLocal();
+    render();
+  }
+
   function setSelectedToggleInverted(startsInvisible) {
     const obj = selectedObject();
     if (!obj || obj.type !== "toggle-platform") return;
@@ -2718,6 +2752,7 @@
           obj.movingMin = data.min;
           obj.movingMax = data.max <= data.min ? data.min + 160 : data.max;
           obj.movingSpeed = data.speed === 0 ? 80 : data.speed;
+          obj.movingReverse = !!data.reverse;
         }
         syncObjectInternals(obj);
         saveLocal();
@@ -2729,6 +2764,9 @@
     bindMoving(els.moveSpeed, "movingSpeed");
     if (els.moveAxis) {
       els.moveAxis.addEventListener("change", () => setSelectedMovementAxis(els.moveAxis.value));
+    }
+    if (els.moveReverse) {
+      els.moveReverse.addEventListener("change", () => setSelectedMovementReverse(els.moveReverse.checked));
     }
     if (els.toggleEnabled) {
       els.toggleEnabled.addEventListener("change", () => setSelectedToggleEnabled(els.toggleEnabled.checked));
